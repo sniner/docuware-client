@@ -176,14 +176,14 @@ $ dw-client list --file-cabinet Archive
 You can also display a (partial) selection of the contents of individual fields:
 
 ```console
-$ dw-client list --file-cabinet Archive --dialog custom --field DocNo(partial) 
+$ dw-client list --file-cabinet Archive --dialog custom --field DocNo
 ```
 
 
 ## Further reading
 
 * Entry point to [DocuWare's official documentation][2] of the REST API.
-* Notable endpoint: `/DocuWare/Platform/Content/PlatformLinkModel.pdf
+* Notable endpoint: `/DocuWare/Platform/Content/PlatformLinkModel.pdf`
 
 
 ## License
