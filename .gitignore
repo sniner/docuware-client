@@ -1,0 +1,11 @@
+/.env
+/.venv/
+/.idea/
+/.vscode/
+/.session
+/.credentials
+/build
+/dist
+*.pyc
+*.egg-info/
+pyproject.toml
