@@ -1,4 +1,4 @@
-import re
+import re, json
 
 from datetime import datetime, date
 from typing import Any, Dict, Iterator, List, Tuple, Type, Union
@@ -136,6 +136,282 @@ class Organization:
             self._info["CompanyNames"] = [line for line in self._info["CompanyNames"] if line] or [self.name]
             self._info["AddressLines"] = [line for line in self._info["AddressLines"] if line]
         return self._info
+
+    # User functions
+
+    @property
+    def users(self):
+        """
+        This function returns a list of User objects obtained from a JSON response.
+        :return: A list of User objects created from the JSON data retrieved from the "users" endpoint.
+        """
+        result = self.client.conn.get_json(self.endpoints["users"])
+        return (User(user, self) for user in result.get("User", []))
+    
+    def get_user(self, key:str, default:Union[Any,None]=NOTHING):
+        """
+        This function returns the first item in a list of users that matches a given key, or a default value
+        if no match is found.
+        
+        :param key: The key parameter is a string that represents the unique identifier or name of the user
+        that we want to retrieve from the list of users
+        :type key: str
+        :param default: The default value to return if the user with the specified key is not found in the
+        list of users. If no default value is provided, the function will raise a KeyError if the user is
+        not found. The default value can be any data type or None
+        :type default: Union[Any,None]
+        :return: The `get_user` method is returning the first item in the `users` list that matches the
+        given `key` (either by `id` or `name`). If no match is found and a `default` value is provided, it
+        will return the `default` value. If no `default` value is provided, it will raise a `ValueError`.
+        """
+        return _first_item_by_id_or_name(self.users, key, default=default)
+    
+    def get_user_list(self):
+        """
+        This function retrieves a list of users from a specified endpoint using a client connection and
+        returns it.
+        :return: The function `get_user_list` is returning a list of dictionaries containing information
+        about users. The list is obtained by calling the `get_json` method of the `self.client.conn` object
+        with the endpoint URL for users. The `result` variable is a dictionary that contains a key "User"
+        whose value is a list of dictionaries. The function returns this list of dictionaries, or an empty
+        list
+        """
+        result = self.client.conn.get_json(self.endpoints["users"])
+        return (result.get("User", []))
+    
+    def create_user(self, userDict):
+        """
+        This function creates a new user in a DocuWare platform using a dictionary of user information.
+        
+        :param userDict: userDict is a dictionary that contains the information needed to create a new user
+        in the DocuWare platform. The dictionary should have the following keys and values:
+            {
+                "Name": "",
+                "Email": "",
+                "Password": "",
+                "DbName": ""
+            }
+        :return: the result of the API call made to create a new user in a DocuWare organization. If the API
+        call is successful, it will return the response from the server as a JSON object. If there is an
+        error, it will return False.
+        """
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/vnd.docuware.platform.createorganizationuser+json"
+        }
+        try:
+            result = self.client.conn.post_json(self.endpoints['userInfo'], headers=headers, json=userDict)
+        except Exception as e:
+            print(f'Error creating user:\n\n{e}')
+            return False
+        return result
+
+    def add_group_to_user(self, groupName, userName):
+        """
+        This function adds a group to a user in a DocuWare organization.
+        
+        :param groupName: The name of the group that you want to add to the user
+        :param userName: The username of the user to whom the group needs to be added
+        :return: the result of the API call made to add a group to a user in the DocuWare platform. If the
+        API call is successful, it will return the result of the call. If there is an error, it will return
+        False.
+        """
+        # Get group information
+        group = self.get_group(groupName)
+        # Get user information
+        user = self.get_user(userName)
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        body = {
+            "Ids": [
+                group.id
+            ],
+            "OperationType": "Add"
+        }
+
+        try:
+            result = self.client.conn.put('/DocuWare/Platform/Organization/UserGroups', headers=headers, params={"UserId": user.id}, json=body)
+        except Exception as e:
+            print(f'Error adding group to user:\n\n{e}')
+            return False
+        return result
+    
+    def remove_group_from_user(self, groupName, userName):
+        """
+        This function removes a specified group from a specified user in a DocuWare organization.
+        
+        :param groupName: The name of the group that you want to remove from the user's membership
+        :param userName: The username of the user from whom the group needs to be removed
+        :return: the result of the API call made to remove a group from a user. If the API call is
+        successful, it will return the result of the call. If there is an error, it will return False.
+        """
+        # Get group information
+        group = self.get_group(groupName)
+        # Get user information
+        user = self.get_user(userName)
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        body = {
+            "Ids": [
+                group.id
+            ],
+            "OperationType": "Remove"
+        }
+        try:
+            result = self.client.conn.put('/DocuWare/Platform/Organization/UserGroups', headers=headers, params={"UserId": user.id}, json=body)
+        except Exception as e:
+            print(f'Error removing group from user:\n\n{e}')
+            return False
+        return result
+
+    def deactivate_user(self, userName):
+        """
+        This function deactivates a user by sending a POST request to an API endpoint with the user's
+        information and setting their "Active" status to False.
+        
+        :param userName: The username of the user that needs to be deactivated
+        :return: the result of the API call made to deactivate the user. If the API call is successful, it
+        will return the response from the server. If there is an error, it will return False.
+        """
+        # Get user id of requested user
+        user = self.get_user(userName)
+        
+        headers = {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                }
+        
+        body = {
+            "Id": user.id,
+            "Name": user.name,
+            "FirstName": user.name.split('.')[0],
+            "LastName": user.name.split('.')[1],
+            "EMail": user.eMail,
+            "Salutation": "",
+            "DBName": user.dbName,
+            "Active": False
+        }
+
+        try:
+            result = self.client.conn.post_text(self.endpoints['userInfo'], headers=headers, json=body)
+        except Exception as e:
+            print(f'Error deactivating user:\n\n{e}')
+            return False
+        return result
+    
+    def activate_user(self, userName):
+        """
+        This function activates a user by sending a POST request with user information to an endpoint.
+        
+        :param userName: The username of the user that needs to be activated
+        :return: the result of the API call made to activate the user. If the API call is successful, it
+        will return the response from the server. If there is an error, it will return False.
+        """
+        # Get user id of requested user
+        user = self.get_user(userName)
+        
+        headers = {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                }
+        
+        body = {
+            "Id": user.id,
+            "Name": user.name,
+            "FirstName": user.name.split('.')[0],
+            "LastName": user.name.split('.')[1],
+            "EMail": user.eMail,
+            "Salutation": "",
+            "DBName": user.dbName,
+            "Active": True
+        }
+
+        try:
+            result = self.client.conn.post_text(self.endpoints['userInfo'], headers=headers, json=body)
+        except Exception as e:
+            print(f'Error activating user:\n\n{e}')
+            return False
+        return result
+
+
+    # Group functions
+    @property
+    def groups(self):
+        """
+        This function retrieves a list of groups from a client connection and returns them as a list of
+        Group objects.
+        :return: The `groups()` method is returning a tuple of `Group` objects. The `Group` objects are
+        created using the `Group` class and the data obtained from the `result` variable, which is a JSON
+        object obtained from the `self.client.conn.get_json()` method call. The `result.get("Item", [])`
+        method call returns a list of dictionaries, where each dictionary represents a group
+        """
+        result = self.client.conn.get_json(self.endpoints["groups"])
+        return (Group(group, self) for group in result.get("Item", []))
+    
+    def get_group(self, key:str, default:Union[Any,None]=NOTHING):
+        """
+        This function returns the first item in a list of groups that matches a given key, or a default
+        value if no match is found.
+        
+        :param key: The key parameter is a string that represents the identifier or name of the group that
+        we want to retrieve
+        :type key: str
+        :param default: The default value to return if the key is not found in the groups list. If no
+        default value is provided, the function will raise a KeyError if the key is not found. The default
+        value is set to NOTHING, which is likely a custom constant defined elsewhere in the code
+        :type default: Union[Any,None]
+        :return: The `get_group` method is returning the first item in the `groups` list that matches the
+        given `key` parameter, either by its `id` or `name` attribute. If no match is found, it returns the
+        `default` value, which is set to `NOTHING` by default but can be set to any other value.
+        """
+        return _first_item_by_id_or_name(self.groups, key, default=default)
+    
+    def get_group_list(self):
+        """
+        This function retrieves a list of groups from a JSON endpoint and returns it.
+        :return: The `get_group_list` method is returning a list of items from the "groups" endpoint of the
+        client's connection in JSON format. If there are no items, it will return an empty list.
+        """
+        result = self.client.conn.get_json(self.endpoints["groups"])
+        return (result.get("Item", []))
+
+    def __str__(self):
+        return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
+
+
+class User:
+    def __init__(self, config:dict, organization:Organization):
+        self.organization = organization
+        self.name = config.get("Name")
+        self.id = config.get("Id")
+        self.firstName = config.get("FirstName")
+        self.lastName = config.get("LastName")
+        self.salutation = config.get("Salutation")
+        self.dbName = config.get("DBName")
+        self.active = config.get("Active")
+        self.eMail = config.get("EMail")
+        self.endpoints = structs.Endpoints(config)
+        self._dialogs = None
+
+    def __str__(self):
+        return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
+    
+
+class Group:
+    def __init__(self, config:dict, organization:Organization):
+        self.organization = organization
+        self.name = config.get("Name")
+        self.id = config.get("Id")
+        self.endpoints = structs.Endpoints(config)
+        self._dialogs = None
 
     def __str__(self):
         return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
