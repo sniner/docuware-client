@@ -75,6 +75,30 @@ class Connection:
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
         return self.post(path, headers=headers, json=json, data=data).text
 
+    def _put(self, url:str, headers:Dict[str,str]=None, params:Any=None, json:dict=None, data:Any=None):
+        headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
+        return self.session.put(url, headers=headers, params=params, json=json, data=data)
+
+    def put(self, path:str, headers:Dict[str,str]=None, params:Any=None, json:dict=None, data:Any=None):
+        url = self.make_url(path)
+        resp = self._put(url, headers=headers, params=params, json=json, data=data)
+        if resp.status_code==200:
+            return resp
+        else:
+            raise errors.ResourceError(
+                f"PUT request failed with code {resp.status_code} and message \'{resp.content}\'",
+                url=url,
+                status_code=resp.status_code
+            )
+
+    def put_json(self, path:str, headers:Dict[str,str]=None, params:Any=None, json:dict=None, data:Any=None):
+        headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
+        return self.put(path, headers=headers, params=params, json=json, data=data).json(object_hook=self._json_object_hook)
+
+    def put_text(self, path:str, headers:Dict[str,str]=None, params:Any=None, json:dict=None, data:Any=None):
+        headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
+        return self.put(path, headers=headers, params=params, json=json, data=data).text
+
     def _get(self, url:str, headers:Dict[str,str]=None, data:Any=None):
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
         return self.session.get(url, headers=headers, data=data)
