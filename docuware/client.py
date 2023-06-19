@@ -282,21 +282,29 @@ class Organization:
         will return the response from the server. If there is an error, it will return False.
         """
         # Get user id of requested user
-        user = self.get_user(userName)
+        user = self.get_user(user_name)
         
         headers = {
                     "Accept": "application/json",
                     "Content-Type": "application/json"
                 }
-        
+
+        name_parts = user.name.rsplit('.', 1)
+        if len(name_parts) > 1:
+            first_name = name_parts[0]
+            last_name = name_parts[1]
+        else:
+            first_name = ""
+            last_name = user.name
+
         body = {
             "Id": user.id,
             "Name": user.name,
-            "FirstName": user.name.split('.')[0],
-            "LastName": user.name.split('.')[1],
-            "EMail": user.eMail,
+            "FirstName": first_name,
+            "LastName": last_name,
+            "EMail": user.email,
             "Salutation": "",
-            "DBName": user.dbName,
+            "DBName": user.db_name,
             "Active": False
         }
 
@@ -316,21 +324,29 @@ class Organization:
         will return the response from the server. If there is an error, it will return False.
         """
         # Get user id of requested user
-        user = self.get_user(userName)
+        user = self.get_user(user_name)
         
         headers = {
                     "Accept": "application/json",
                     "Content-Type": "application/json"
                 }
-        
+
+        name_parts = user.name.rsplit('.', 1)
+        if len(name_parts) > 1:
+            first_name = name_parts[0]
+            last_name = name_parts[1]
+        else:
+            first_name = ""
+            last_name = user.name
+
         body = {
             "Id": user.id,
             "Name": user.name,
-            "FirstName": user.name.split('.')[0],
-            "LastName": user.name.split('.')[1],
-            "EMail": user.eMail,
+            "FirstName": first_name,
+            "LastName": last_name,
+            "EMail": user.email,
             "Salutation": "",
-            "DBName": user.dbName,
+            "DBName": user.db_name,
             "Active": True
         }
 
