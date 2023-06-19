@@ -179,7 +179,7 @@ class Organization:
         result = self.client.conn.get_json(self.endpoints["users"])
         return (result.get("User", []))
     
-    def create_user(self, userDict):
+    def create_user(self, user_dict):
         """
         This function creates a new user in a DocuWare platform using a dictionary of user information.
         
@@ -200,13 +200,13 @@ class Organization:
             "Content-Type": "application/vnd.docuware.platform.createorganizationuser+json"
         }
         try:
-            result = self.client.conn.post_json(self.endpoints['userInfo'], headers=headers, json=userDict)
+            result = self.client.conn.post_json(self.endpoints['userInfo'], headers=headers, json=user_dict)
         except Exception as e:
             print(f'Error creating user:\n\n{e}')
             return False
         return result
 
-    def add_group_to_user(self, groupName, userName):
+    def add_group_to_user(self, group_name, user_name):
         """
         This function adds a group to a user in a DocuWare organization.
         
@@ -217,9 +217,9 @@ class Organization:
         False.
         """
         # Get group information
-        group = self.get_group(groupName)
+        group = self.get_group(group_name)
         # Get user information
-        user = self.get_user(userName)
+        user = self.get_user(user_name)
 
         headers = {
             "Accept": "application/json",
@@ -240,7 +240,7 @@ class Organization:
             return False
         return result
     
-    def remove_group_from_user(self, groupName, userName):
+    def remove_group_from_user(self, group_name, user_name):
         """
         This function removes a specified group from a specified user in a DocuWare organization.
         
@@ -250,9 +250,9 @@ class Organization:
         successful, it will return the result of the call. If there is an error, it will return False.
         """
         # Get group information
-        group = self.get_group(groupName)
+        group = self.get_group(group_name)
         # Get user information
-        user = self.get_user(userName)
+        user = self.get_user(user_name)
 
         headers = {
             "Accept": "application/json",
@@ -272,7 +272,7 @@ class Organization:
             return False
         return result
 
-    def deactivate_user(self, userName):
+    def deactivate_user(self, user_name):
         """
         This function deactivates a user by sending a POST request to an API endpoint with the user's
         information and setting their "Active" status to False.
@@ -307,7 +307,7 @@ class Organization:
             return False
         return result
     
-    def activate_user(self, userName):
+    def activate_user(self, user_name):
         """
         This function activates a user by sending a POST request with user information to an endpoint.
         
@@ -392,12 +392,12 @@ class User:
         self.organization = organization
         self.name = config.get("Name")
         self.id = config.get("Id")
-        self.firstName = config.get("FirstName")
-        self.lastName = config.get("LastName")
+        self.first_name = config.get("FirstName")
+        self.last_name = config.get("LastName")
         self.salutation = config.get("Salutation")
-        self.dbName = config.get("DBName")
+        self.db_name = config.get("DBName")
         self.active = config.get("Active")
-        self.eMail = config.get("EMail")
+        self.email = config.get("EMail")
         self.endpoints = structs.Endpoints(config)
         self._dialogs = None
 
