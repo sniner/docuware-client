@@ -115,6 +115,28 @@ for result in dlg.search("DOCNO=123456"):
         docuware.write_binary_file(data, filename)
 ```
 
+Users and groups of an organisation can be accessed and managed:
+
+```python
+# Iterate over the list of users and groups:
+for user in org.users:
+    print(user)
+for group in org.groups:
+    print(group)
+
+# Find a specific user:
+user = org.get_user("Doe, John")
+
+# Add a user to a group:
+org.add_group_to_user("Finance", "Doe, John")
+
+# Deactivate/activate a user:
+org.deactivate_user("Doe, John")
+org.activate_user("Doe, John")
+```
+
+For more details please use `help(docuware.client.Organization)`.
+
 
 ## CLI usage
 
