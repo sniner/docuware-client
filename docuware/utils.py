@@ -11,12 +11,22 @@ DATE_PATTERN = re.compile(r"/Date\((\d+)\)/")
 
 
 def datetime_from_string(value:str, auto_date:bool=False) -> Union[date,datetime,None]:
+    """
+    Dates earlier than 1970 and later than 2038 are breaks the code
+    and not just for the document which has inccorect date entry but also
+    all remaining documents in that search dialog. By returning None we
+    easly identify those currepted documents and inform the owner so they
+    can be fixed.
+    """    
     if value:
         if m := DATE_PATTERN.match(str(value)):
             msec = int(m[1])
             if msec>0:
                 unix_timestamp = msec/1000
-                dt = datetime.fromtimestamp(unix_timestamp)
+                try:
+                    dt = datetime.fromtimestamp(unix_timestamp)
+                except:
+                    dt = None
                 if auto_date:
                     if dt.hour==0 and dt.minute==0 and dt.second==0 and dt.microsecond==0:
                         return date(dt.year, dt.month, dt.day)
@@ -30,12 +40,22 @@ def datetime_from_string(value:str, auto_date:bool=False) -> Union[date,datetime
 
 
 def date_from_string(value:str) -> Union[date,None]:
+    """
+    Dates earlier than 1970 and later than 2038 are breaks the code
+    and not just for the document which has inccorect date entry but also
+    all remaining documents in that search dialog. By returning None we
+    easly identify those currepted documents and inform the owner so they
+    can be fixed.
+    """
     if value:
         if m := DATE_PATTERN.match(str(value)):
             msec = int(m[1])
             if msec>0:
                 unix_timestamp = msec/1000
-                dt = date.fromtimestamp(unix_timestamp)
+                try:
+                    dt = date.fromtimestamp(unix_timestamp)
+                except:
+                    dt = None
                 return dt
             else:
                 return None
