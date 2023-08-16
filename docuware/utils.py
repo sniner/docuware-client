@@ -17,6 +17,7 @@ def datetime_from_string(value:str, auto_date:bool=False) -> Union[date,datetime
     all remaining documents in that search dialog. By returning None we
     easly identify those currepted documents and inform the owner so they
     can be fixed.
+    For example: 3023-01-01
     """    
     if value:
         if m := DATE_PATTERN.match(str(value)):
@@ -46,6 +47,7 @@ def date_from_string(value:str) -> Union[date,None]:
     all remaining documents in that search dialog. By returning None we
     easly identify those currepted documents and inform the owner so they
     can be fixed.
+    For example: 3023-01-01
     """
     if value:
         if m := DATE_PATTERN.match(str(value)):
