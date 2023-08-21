@@ -155,7 +155,7 @@ class Organization:
             return False
         return result
 
-    def update_data_entry_in_file_cabinet(self, file_cabinet, docuware_id:str, data:dict):
+    def update_data_entry_in_file_cabinet(self, file_cabinet:str, docuware_id:str, data:dict):
         """
         The function `update_data_entry_in_file_cabinet` updates the data fields of a document in a file
         cabinet using the provided document ID and data dictionary.
