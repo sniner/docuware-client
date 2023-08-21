@@ -103,6 +103,57 @@ class Organization:
 
     def file_cabinet(self, key:str, default:Union[Any,None]=NOTHING):
         return _first_item_by_id_or_name(self.file_cabinets, key, default=default)
+    
+    def create_data_entry_in_file_cabinet(self, file_cabinet:str, data:dict):
+        """
+        The function `create_data_entry_in_file_cabinet` creates a data entry in a file cabinet by
+        generating an XML payload and making a POST request to the DocuWare API.
+        
+        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or identifier
+        of the file cabinet where the data entry will be created
+        :type file_cabinet: str
+        :param data: The `data` parameter is a dictionary that contains the information to be included in
+        the data entry. The keys of the dictionary represent the field names, and the values represent the
+        corresponding field values
+        example dictionary payload: 
+            {
+                "field1": "value1",
+                "field2": "value2",
+                ...
+            }
+        :type data: dict
+        :return: the result of creating a data entry in the file cabinet.
+        """
+
+        fc_id = self.file_cabinet(file_cabinet).id
+
+        xml_head = """<Document xmlns='http://dev.docuware.com/schema/public/services/platform' Id='1'>
+<Fields>"""
+        
+        xml_middle = ""
+        for key, value in data.items():
+            xml_field = f"""<Field FieldName='{key}'>
+<String>{value}</String>
+</Field>"""
+            xml_middle += xml_field
+
+        xml_foot = """</Fields>
+</Document>"""
+        
+        xml_payload = xml_head + xml_middle + xml_foot
+
+        print(xml_payload)
+
+        headers = {
+            "Content-Type": "application/xml",
+            "Accept": "application/xml"
+        }
+        try:
+            result = self.client.conn.post_text(f"{self.endpoints['filecabinets']}/{fc_id}/Documents?count=1", headers=headers, data=str.encode(xml_payload))
+        except Exception as e:
+            print(f'Error creating document data inf file cabinet:\n\n{e}')
+            return False
+        return result
 
     @property
     def my_tasks(self):
