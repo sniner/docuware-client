@@ -117,8 +117,8 @@ class Organization:
         corresponding field values
         example dictionary payload: 
             {
-                "field1": "value1",
-                "field2": "value2",
+                "FIELD_ID1": "value1",
+                "FIELD_ID2": "value2",
                 ...
             }
         :type data: dict
@@ -151,7 +151,86 @@ class Organization:
         try:
             result = self.client.conn.post_text(f"{self.endpoints['filecabinets']}/{fc_id}/Documents?count=1", headers=headers, data=str.encode(xml_payload))
         except Exception as e:
-            print(f'Error creating document data inf file cabinet:\n\n{e}')
+            print(f'Error creating document data in file cabinet:\n\n{e}')
+            return False
+        return result
+
+    def update_data_entry_in_file_cabinet(self, file_cabinet, docuware_id:str, data:dict):
+        """
+        The function `update_data_entry_in_file_cabinet` updates the data fields of a document in a file
+        cabinet using the provided document ID and data dictionary.
+        
+        :param file_cabinet: The `file_cabinet` parameter is the name or ID of the file cabinet where
+        the document is stored
+        :param docuware_id: The `docuware_id` parameter is a string that represents the specific
+        DOCUWARE_ID of the document you want to update in the file cabinet
+        :type docuware_id: str
+        :param data: The `data` parameter is a dictionary that contains the updated field values for a
+        document in the file cabinet. Each key-value pair in the dictionary represents a field name and
+        its corresponding updated value
+        example data dictionary:
+            {
+                "FIELD_ID1": "value1",
+                "FIELD_ID2": "value2",
+                ...
+            }
+        :type data: dict
+        :return: the result of the update operation. If the update is successful, it will return the
+        result of the update operation. If there is an error during the update, it will return False.
+        """
+
+        # Get file cabinet
+        fc = self.file_cabinet(file_cabinet)
+
+        # Retrieve and extract file cabinet fields and types
+        dlg = fc.search_dialog()
+        fc_fields = []
+        for field in dlg.fields.values():
+            fc_field = {}
+            fc_field["id"] = field.id
+            fc_field["length"] = field.length
+            fc_field["name"] = field.name
+            fc_field["type"] = field.type
+            fc_fields.append(fc_field)
+
+        # The below code is creating a search dialog and using it to search for a document with a
+        # specific DOCUWARE_ID. It then retrieves the document ID of the search result.
+        dlg = fc.search_dialog()
+        for result in dlg.search(f"DOCUWARE_ID={docuware_id}"):
+            document_id = result.document.id
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        body = {
+            "Field": []
+        }
+
+        # The above code is iterating over the items in the `data` dictionary. For each key-value
+        # pair, it creates a list called `item_element_name` using a list comprehension.
+        for key, value in data.items():
+            # The above code is creating a list called `item_element_name` using a list comprehension.
+            # It checks each element `x` in the list `fc_fields` and checks if the value of the `type`
+            # key in `x` is equal to 'Decimal'. If it is, the corresponding element in
+            # `item_element_name` is set to 'Float'. If not, it checks if the value of the `type` key
+            # is equal to 'Numeric'. If it is, the corresponding element in `item_element_name` is set
+            # to 'Integer'. If neither condition is met, the corresponding element
+            item_element_name = ['Decimal' if x['type'] == 'Decimal' else 'String' for x in fc_fields if x['id'] == key.upper()]
+            field = {
+                "FieldName": key, 
+                "Item": value, 
+                "ItemElementName": item_element_name[0]
+                }
+            body["Field"].append(field)
+
+        print(json.dumps(body))
+
+        try:
+            result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
+        except Exception as e:
+            print(f'Error updating document data fields:\n\n{e}')
             return False
         return result
 
