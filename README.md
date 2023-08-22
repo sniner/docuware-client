@@ -72,6 +72,21 @@ for field in dlg.fields.values():
     print(field)
 ```
 
+Get file cabinet fields as list:
+```python
+dlg = fc.search_dialog()
+fc_fields = []
+for field in dlg.fields.values():
+    fc_field = {}
+    fc_field["id"] = field.id
+    fc_field["length"] = field.length
+    fc_field["name"] = field.name
+    fc_field["type"] = field.type
+    fc_fields.append(fc_field)
+
+print(fc_fields)
+```
+
 Let's search for some documents:
 
 ```python
@@ -113,6 +128,36 @@ for result in dlg.search("DOCNO=123456"):
     for att in doc.attachments:
         data, content_type, filename = att.download()
         docuware.write_binary_file(data, filename)
+```
+
+Get all documents and get each documents data fields as dictionary:
+```python
+fc_data = docuwareGetFileCabinetData(org, "FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
+print(fc_data)
+```
+The _query_ parameter is optional. If omitted default value is set to emtpy list [].
+
+Create data entry in file cabinet:
+```python
+data = {
+    "FIELD1": "value1",
+    "FIELD2": "value2",
+}
+response = org.create_data_entry_in_file_cabinet("FILE_CABINET_NAME", data)
+```
+
+Update data fields of document:
+```python
+fields = {
+    "FIELD1": "value1",
+    "FIELD2": 99999
+}
+response = org.update_data_entry_in_file_cabinet("FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], fields)
+```
+
+Delete document specific document:
+```python
+response = org.delete_document_from_file_cabinet("FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
 ```
 
 Users and groups of an organisation can be accessed and managed:
