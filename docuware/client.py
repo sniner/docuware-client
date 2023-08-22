@@ -104,6 +104,56 @@ class Organization:
     def file_cabinet(self, key:str, default:Union[Any,None]=NOTHING):
         return _first_item_by_id_or_name(self.file_cabinets, key, default=default)
     
+    def get_file_cabinet_document_and_data(self, file_cabinet:str, query:list=[]):
+        """
+        The function `get_file_cabinet_document_and_data` retrieves documents and their associated data
+        from a file cabinet, based on a given query.
+        
+        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or
+        identifier of the file cabinet from which you want to retrieve documents and data
+        :type file_cabinet: str
+        :param query: The `query` parameter is a list that contains the search criteria for the
+        documents. It is optional and can be left empty if you want to retrieve all documents from the
+        file cabinet. If you provide a query, the function will only return documents that match the
+        specified criteria
+        :type query: list
+        :return: a dictionary object containing information about the documents and their fields in a
+        file cabinet. The keys of the dictionary are the document IDs, and the values are lists of
+        dictionaries representing the fields of each document. Each field dictionary contains
+        information such as the field ID, content type, name, and value.
+        """
+
+        fc = self.file_cabinet(file_cabinet)
+
+        dlg = fc.search_dialog()
+
+        documents = []
+        document_object = {}
+        for document in dlg.search(query):
+            field_list = []
+
+            for field in document.fields:
+                document_fields = {}
+
+                document_fields["field_id"] = field.id
+                document_fields["content_type"] = field.content_type
+                document_fields["name"] = field.name
+                document_fields["value"] = field.value
+
+                ### More system fields available ###
+                dt_fields = ["Stored on", "Modified on", "Last accessed on"]
+                if any(field.name in dt_fields for item in dt_fields):
+                    document_fields["value"] = datetime.strftime(field.value, '%Y-%m-%d %H:%M')
+                else:
+                    document_fields["value"] = field.value
+                ### More system fields available ###
+
+                field_list.append(document_fields)
+            
+                document_object[document.document.id] = field_list
+
+        return document_object
+    
     def create_data_entry_in_file_cabinet(self, file_cabinet:str, data:dict):
         """
         The function `create_data_entry_in_file_cabinet` creates a data entry in a file cabinet by
@@ -155,7 +205,7 @@ class Organization:
             return False
         return result
 
-    def update_data_entry_in_file_cabinet(self, file_cabinet:str, docuware_id:str, data:dict):
+    def update_data_entry_in_file_cabinet(self, file_cabinet:str, query:list=[], data:dict={}):
         """
         The function `update_data_entry_in_file_cabinet` updates the data fields of a document in a file
         cabinet using the provided document ID and data dictionary.
@@ -196,7 +246,7 @@ class Organization:
         # The below code is creating a search dialog and using it to search for a document with a
         # specific DOCUWARE_ID. It then retrieves the document ID of the search result.
         dlg = fc.search_dialog()
-        for result in dlg.search(f"DOCUWARE_ID={docuware_id}"):
+        for result in dlg.search(query):
             document_id = result.document.id
 
         headers = {
@@ -234,7 +284,7 @@ class Organization:
             return False
         return result
 
-    def delete_document_from_file_cabinet(self, file_cabinet:str, query:list):
+    def delete_document_from_file_cabinet(self, file_cabinet:str, query:list=[]):
 
         # Get file cabinet
         fc = self.file_cabinet(file_cabinet)
