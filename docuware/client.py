@@ -234,6 +234,30 @@ class Organization:
             return False
         return result
 
+    def delete_document_from_file_cabinet(self, file_cabinet:str, query:list):
+
+        # Get file cabinet
+        fc = self.file_cabinet(file_cabinet)
+
+        fc_id = self.file_cabinet(file_cabinet).id
+
+        # The below code is creating a search dialog and using it to search for a document with a
+        # specific DOCUWARE_ID. It then retrieves the document ID of the search result.
+        dlg = fc.search_dialog()
+        for result in dlg.search(query):
+            document_id = result.document.id
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        try:
+            result = self.client.conn.delete(f"{self.endpoints['filecabinets']}/{fc_id}/Documents/{document_id}", headers=headers)
+        except Exception as e:
+            print(f'Error creating document data in file cabinet:\n\n{e}')
+            return False
+        return result
+
     @property
     def my_tasks(self):
         # Sorry, but couldn't figure out how to get "My tasks" list.
