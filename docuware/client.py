@@ -127,7 +127,6 @@ class Organization:
 
         dlg = fc.search_dialog()
 
-        documents = []
         document_object = {}
         for document in dlg.search(query):
             field_list = []
@@ -141,6 +140,7 @@ class Organization:
                 document_fields["value"] = field.value
 
                 ### More system fields available ###
+                # Transform datetime fields into proper datetime strings
                 dt_fields = ["Stored on", "Modified on", "Last accessed on"]
                 if any(field.name in dt_fields for item in dt_fields):
                     document_fields["value"] = datetime.strftime(field.value, '%Y-%m-%d %H:%M')
@@ -192,14 +192,12 @@ class Organization:
         
         xml_payload = xml_head + xml_middle + xml_foot
 
-        print(xml_payload)
-
         headers = {
             "Content-Type": "application/xml",
             "Accept": "application/xml"
         }
         try:
-            result = self.client.conn.post_text(f"{self.endpoints['filecabinets']}/{fc_id}/Documents?count=1", headers=headers, data=str.encode(xml_payload))
+            result = self.client.conn.post_text(f"{self.endpoints['filecabinets']}/{fc_id}/Documents", headers=headers, data=str.encode(xml_payload))
         except Exception as e:
             print(f'Error creating document data in file cabinet:\n\n{e}')
             return False
@@ -246,8 +244,16 @@ class Organization:
         # The below code is creating a search dialog and using it to search for a document with a
         # specific DOCUWARE_ID. It then retrieves the document ID of the search result.
         dlg = fc.search_dialog()
-        for result in dlg.search(query):
-            document_id = result.document.id
+        fc_search = dlg.search(query)
+        if fc_search.count == 1:
+            for result in fc_search:
+                document_id = result.document.id
+        elif fc_search.count < 1:
+            print('Update search query returned no results, update request will not be executed.')
+            return False
+        else:
+            print('Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
+            return False
 
         headers = {
             "Accept": "application/json",
@@ -275,8 +281,6 @@ class Organization:
                 }
             body["Field"].append(field)
 
-        print(json.dumps(body))
-
         try:
             result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
         except Exception as e:
@@ -285,17 +289,44 @@ class Organization:
         return result
 
     def delete_document_from_file_cabinet(self, file_cabinet:str, query:list=[]):
+        """
+        The function `delete_document_from_file_cabinet` deletes a document from a specified file
+        cabinet based on a search query, returning a boolean value indicating the success of the
+        deletion.
+        
+        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or
+        identifier of the file cabinet from which you want to delete a document
+        :type file_cabinet: str
+        :param query: The `query` parameter is a list that contains the search criteria for finding the
+        document to be deleted. It is used to filter the documents in the file cabinet and retrieve the
+        specific document that needs to be deleted. The search criteria can include attributes such as
+        document name, document type, date created,
+        :type query: list
+        :return: the result of the delete request.
+        """
 
         # Get file cabinet
         fc = self.file_cabinet(file_cabinet)
 
         fc_id = self.file_cabinet(file_cabinet).id
 
-        # The below code is creating a search dialog and using it to search for a document with a
-        # specific DOCUWARE_ID. It then retrieves the document ID of the search result.
         dlg = fc.search_dialog()
-        for result in dlg.search(query):
-            document_id = result.document.id
+        fc_search = dlg.search(query)
+        # The below code is checking the count of a search query result. If the count is equal to 1,
+        # it retrieves the document ID from the result. If the count is less than 1, it prints a
+        # message indicating that the delete request will not be executed. If the count is greater
+        # than 1, it prints a message indicating that the delete request will not be executed and
+        # suggests specifying a more specific search query. Finally, the code calls SystemExit to exit
+        # the program.
+        if fc_search.count == 1:
+            for result in fc_search:
+                document_id = result.document.id
+        elif fc_search.count < 1:
+            print('Delete search query returned no results, delete request will not be executed.')
+            return False
+        else:
+            print('Delete search query returned more than 1 result, delete request can only be executed for one document. Please specify your search query.')
+            return False
 
         headers = {
             "Content-Type": "application/json",
