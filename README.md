@@ -146,7 +146,7 @@ data = {
 response = org.create_data_entry_in_file_cabinet("FILE_CABINET_NAME", data)
 ```
 
-Update data fields of document:
+Update data fields of document. The _query_ parameter needs to return one single document. you can use a _for-loop_ to execute this function on multiple documents:
 ```python
 fields = {
     "FIELD1": "value1",
@@ -155,7 +155,7 @@ fields = {
 response = org.update_data_entry_in_file_cabinet("FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], fields)
 ```
 
-Delete document specific document:
+Delete document specific document. The _query_ parameter needs to return one single document. you can use a _for-loop_ to execute this function on multiple documents:
 ```python
 response = org.delete_document_from_file_cabinet("FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
 ```
