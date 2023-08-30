@@ -103,57 +103,7 @@ class Organization:
 
     def file_cabinet(self, key:str, default:Union[Any,None]=NOTHING):
         return _first_item_by_id_or_name(self.file_cabinets, key, default=default)
-    
-    def get_file_cabinet_document_and_data(self, file_cabinet:str, query:list=[]):
-        """
-        The function `get_file_cabinet_document_and_data` retrieves documents and their associated data
-        from a file cabinet, based on a given query.
-        
-        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or
-        identifier of the file cabinet from which you want to retrieve documents and data
-        :type file_cabinet: str
-        :param query: The `query` parameter is a list that contains the search criteria for the
-        documents. It is optional and can be left empty if you want to retrieve all documents from the
-        file cabinet. If you provide a query, the function will only return documents that match the
-        specified criteria
-        :type query: list
-        :return: a dictionary object containing information about the documents and their fields in a
-        file cabinet. The keys of the dictionary are the document IDs, and the values are lists of
-        dictionaries representing the fields of each document. Each field dictionary contains
-        information such as the field ID, content type, name, and value.
-        """
 
-        fc = self.file_cabinet(file_cabinet)
-
-        dlg = fc.search_dialog()
-
-        document_object = {}
-        for document in dlg.search(query):
-            field_list = []
-
-            for field in document.fields:
-                document_fields = {}
-
-                document_fields["field_id"] = field.id
-                document_fields["content_type"] = field.content_type
-                document_fields["name"] = field.name
-                document_fields["value"] = field.value
-
-                ### More system fields available ###
-                # Transform datetime fields into proper datetime strings
-                dt_fields = ["Stored on", "Modified on", "Last accessed on"]
-                if any(field.name in dt_fields for item in dt_fields):
-                    document_fields["value"] = datetime.strftime(field.value, '%Y-%m-%d %H:%M')
-                else:
-                    document_fields["value"] = field.value
-                ### More system fields available ###
-
-                field_list.append(document_fields)
-            
-                document_object[document.document.id] = field_list
-
-        return document_object
-    
     def create_data_entry_in_file_cabinet(self, file_cabinet:str, data:dict):
         """
         The function `create_data_entry_in_file_cabinet` creates a data entry in a file cabinet by
@@ -285,57 +235,6 @@ class Organization:
             result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
         except Exception as e:
             print(f'Error updating document data fields:\n\n{e}')
-            return False
-        return result
-
-    def delete_document_from_file_cabinet(self, file_cabinet:str, query:list=[]):
-        """
-        The function `delete_document_from_file_cabinet` deletes a document from a specified file
-        cabinet based on a search query, returning a boolean value indicating the success of the
-        deletion.
-        
-        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or
-        identifier of the file cabinet from which you want to delete a document
-        :type file_cabinet: str
-        :param query: The `query` parameter is a list that contains the search criteria for finding the
-        document to be deleted. It is used to filter the documents in the file cabinet and retrieve the
-        specific document that needs to be deleted. The search criteria can include attributes such as
-        document name, document type, date created,
-        :type query: list
-        :return: the result of the delete request.
-        """
-
-        # Get file cabinet
-        fc = self.file_cabinet(file_cabinet)
-
-        fc_id = self.file_cabinet(file_cabinet).id
-
-        dlg = fc.search_dialog()
-        fc_search = dlg.search(query)
-        # The below code is checking the count of a search query result. If the count is equal to 1,
-        # it retrieves the document ID from the result. If the count is less than 1, it prints a
-        # message indicating that the delete request will not be executed. If the count is greater
-        # than 1, it prints a message indicating that the delete request will not be executed and
-        # suggests specifying a more specific search query. Finally, the code calls SystemExit to exit
-        # the program.
-        if fc_search.count == 1:
-            for result in fc_search:
-                document_id = result.document.id
-        elif fc_search.count < 1:
-            print('Delete search query returned no results, delete request will not be executed.')
-            return False
-        else:
-            print('Delete search query returned more than 1 result, delete request can only be executed for one document. Please specify your search query.')
-            return False
-
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        try:
-            result = self.client.conn.delete(f"{self.endpoints['filecabinets']}/{fc_id}/Documents/{document_id}", headers=headers)
-        except Exception as e:
-            print(f'Error creating document data in file cabinet:\n\n{e}')
             return False
         return result
 
@@ -948,7 +847,7 @@ class SearchResultItem:
         if self._document is None:
             dw = self.result.query.dialog.client
             config = dw.conn.get_json(self.endpoints["self"])
-            self._document = Document(config, self.result.query.dialog.file_cabinet)
+            self._document = Document(config, self.result.query.dialog.file_cabinet, dw)
         return self._document
 
     def __str__(self):
@@ -1041,8 +940,9 @@ FieldValue.TYPE_TABLE = cidict.CaseInsensitiveDict({
 })
 
 
-class Document:
-    def __init__(self, config:dict, file_cabinet:FileCabinet):
+class Document():
+    def __init__(self, config:dict, file_cabinet:FileCabinet, client:DocuwareClient):
+        self.client = client
         self.file_cabinet = file_cabinet
         self.id = config.get("Id")
         self.title = config.get("Title")
@@ -1075,6 +975,34 @@ class Document:
     def download_all(self) -> Tuple[bytes,str,str]:
         dw = self.file_cabinet.organization.client
         return dw.conn.get_bytes(self.endpoints["downloadAsArchive"])
+
+    def delete(self, document):
+        """
+        The function `delete_document_from_file_cabinet` deletes a document from a specified file
+        cabinet based on a search query, returning a boolean value indicating the success of the
+        deletion.
+        
+        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or
+        identifier of the file cabinet from which you want to delete a document
+        :type file_cabinet: str
+        :param query: The `query` parameter is a list that contains the search criteria for finding the
+        document to be deleted. It is used to filter the documents in the file cabinet and retrieve the
+        specific document that needs to be deleted. The search criteria can include attributes such as
+        document name, document type, date created,
+        :type query: list
+        :return: the result of the delete request.
+        """
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        try:
+            result = self.client.conn.delete(f"{self.endpoints['self']}", headers=headers)
+        except Exception as e:
+            return False
+        return result
 
     def __str__(self):
         return f"{self.__class__.__name__} '{self.title}' [{self.id}]"
