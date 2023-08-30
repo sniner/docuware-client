@@ -1,10 +1,11 @@
-import re, json
+import re, json, logging
 
 from datetime import datetime, date
 from typing import Any, Dict, Iterator, List, Tuple, Type, Union
 
 from docuware import cidict, cijson, conn, errors, parser, structs, utils
 
+log = logging.getLogger(__name__)
 
 def print_json(data):
     cijson.print_json(data)
@@ -149,7 +150,7 @@ class Organization:
         try:
             result = self.client.conn.post_text(f"{self.endpoints['filecabinets']}/{fc_id}/Documents", headers=headers, data=str.encode(xml_payload))
         except Exception as e:
-            print(f'Error creating document data in file cabinet:\n\n{e}')
+            log.debug(f"Problem creating data entry:\n\n{e}")
             return False
         return result
 
@@ -199,10 +200,10 @@ class Organization:
             for result in fc_search:
                 document_id = result.document.id
         elif fc_search.count < 1:
-            print('Update search query returned no results, update request will not be executed.')
+            log.debug('Update search query returned no results, update request will not be executed.')
             return False
         else:
-            print('Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
+            log.debug('Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
             return False
 
         headers = {
@@ -234,7 +235,7 @@ class Organization:
         try:
             result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
         except Exception as e:
-            print(f'Error updating document data fields:\n\n{e}')
+            log.debug(f'Error updating document data fields:\n\n{e}')
             return False
         return result
 
@@ -336,7 +337,7 @@ class Organization:
         try:
             result = self.client.conn.post_json(self.endpoints['userInfo'], headers=headers, json=user_dict)
         except Exception as e:
-            print(f'Error creating user:\n\n{e}')
+            log.debug(f'Problem creating user:\n\n{e}')
             return False
         return result
 
@@ -370,7 +371,7 @@ class Organization:
         try:
             result = self.client.conn.put('/DocuWare/Platform/Organization/UserGroups', headers=headers, params={"UserId": user.id}, json=body)
         except Exception as e:
-            print(f'Error adding group to user:\n\n{e}')
+            log.debug(f'Problem adding group to user:\n\n{e}')
             return False
         return result
     
@@ -402,7 +403,7 @@ class Organization:
         try:
             result = self.client.conn.put('/DocuWare/Platform/Organization/UserGroups', headers=headers, params={"UserId": user.id}, json=body)
         except Exception as e:
-            print(f'Error removing group from user:\n\n{e}')
+            log.debug(f'Problem removing group from user:\n\n{e}')
             return False
         return result
 
@@ -445,7 +446,7 @@ class Organization:
         try:
             result = self.client.conn.post_text(self.endpoints['userInfo'], headers=headers, json=body)
         except Exception as e:
-            print(f'Error deactivating user:\n\n{e}')
+            log.debug(f'Problem deactivating user:\n\n{e}')
             return False
         return result
     
@@ -487,7 +488,7 @@ class Organization:
         try:
             result = self.client.conn.post_text(self.endpoints['userInfo'], headers=headers, json=body)
         except Exception as e:
-            print(f'Error activating user:\n\n{e}')
+            log.debug(f'Problem activating user:\n\n{e}')
             return False
         return result
 
@@ -1001,6 +1002,7 @@ class Document():
         try:
             result = self.client.conn.delete(f"{self.endpoints['self']}", headers=headers)
         except Exception as e:
+            log.debug(f"Problem deleting document:\n\n{e}")
             return False
         return result
 
