@@ -105,69 +105,6 @@ class Organization:
     def file_cabinet(self, key:str, default:Union[Any,None]=NOTHING):
         return _first_item_by_id_or_name(self.file_cabinets, key, default=default)
 
-    def update_data_entry_in_file_cabinet(self, file_cabinet:str, query:list=[], data:dict={}):
-
-        # Get file cabinet
-        fc = self.file_cabinet(file_cabinet)
-
-        # Retrieve and extract file cabinet fields and types
-        dlg = fc.search_dialog()
-        fc_fields = []
-        for field in dlg.fields.values():
-            fc_field = {}
-            fc_field["id"] = field.id
-            fc_field["length"] = field.length
-            fc_field["name"] = field.name
-            fc_field["type"] = field.type
-            fc_fields.append(fc_field)
-
-        # The below code is creating a search dialog and using it to search for a document with a
-        # specific DOCUWARE_ID. It then retrieves the document ID of the search result.
-        dlg = fc.search_dialog()
-        fc_search = dlg.search(query)
-        if fc_search.count == 1:
-            for result in fc_search:
-                document_id = result.document.id
-        elif fc_search.count < 1:
-            log.debug('Update search query returned no results, update request will not be executed.')
-            return False
-        else:
-            log.debug('Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
-            return False
-
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-
-        body = {
-            "Field": []
-        }
-
-        # The above code is iterating over the items in the `data` dictionary. For each key-value
-        # pair, it creates a list called `item_element_name` using a list comprehension.
-        for key, value in data.items():
-            # The above code is creating a list called `item_element_name` using a list comprehension.
-            # It checks each element `x` in the list `fc_fields` and checks if the value of the `type`
-            # key in `x` is equal to 'Decimal'. If it is, the corresponding element in
-            # `item_element_name` is set to 'Float'. If not, it checks if the value of the `type` key
-            # is equal to 'Numeric'. If it is, the corresponding element in `item_element_name` is set
-            # to 'Integer'. If neither condition is met, the corresponding element
-            item_element_name = ['Decimal' if x['type'] == 'Decimal' else 'String' for x in fc_fields if x['id'] == key.upper()]
-            field = {
-                "FieldName": key, 
-                "Item": value, 
-                "ItemElementName": item_element_name[0]
-                }
-            body["Field"].append(field)
-
-        try:
-            result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
-        except Exception as e:
-            log.debug(f'Error updating document data fields:\n\n{e}')
-            return False
-        return result
-
     @property
     def my_tasks(self):
         # Sorry, but couldn't figure out how to get "My tasks" list.
