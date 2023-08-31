@@ -105,78 +105,7 @@ class Organization:
     def file_cabinet(self, key:str, default:Union[Any,None]=NOTHING):
         return _first_item_by_id_or_name(self.file_cabinets, key, default=default)
 
-    def create_data_entry_in_file_cabinet(self, file_cabinet:str, data:dict):
-        """
-        The function `create_data_entry_in_file_cabinet` creates a data entry in a file cabinet by
-        generating an XML payload and making a POST request to the DocuWare API.
-        
-        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or identifier
-        of the file cabinet where the data entry will be created
-        :type file_cabinet: str
-        :param data: The `data` parameter is a dictionary that contains the information to be included in
-        the data entry. The keys of the dictionary represent the field names, and the values represent the
-        corresponding field values
-        example dictionary payload: 
-            {
-                "FIELD_ID1": "value1",
-                "FIELD_ID2": "value2",
-                ...
-            }
-        :type data: dict
-        :return: the result of creating a data entry in the file cabinet.
-        """
-
-        fc_id = self.file_cabinet(file_cabinet).id
-
-        xml_head = """<Document xmlns='http://dev.docuware.com/schema/public/services/platform' Id='1'>
-<Fields>"""
-        
-        xml_middle = ""
-        for key, value in data.items():
-            xml_field = f"""<Field FieldName='{key}'>
-<String>{value}</String>
-</Field>"""
-            xml_middle += xml_field
-
-        xml_foot = """</Fields>
-</Document>"""
-        
-        xml_payload = xml_head + xml_middle + xml_foot
-
-        headers = {
-            "Content-Type": "application/xml",
-            "Accept": "application/xml"
-        }
-        try:
-            result = self.client.conn.post_text(f"{self.endpoints['filecabinets']}/{fc_id}/Documents", headers=headers, data=str.encode(xml_payload))
-        except Exception as e:
-            log.debug(f"Problem creating data entry:\n\n{e}")
-            return False
-        return result
-
     def update_data_entry_in_file_cabinet(self, file_cabinet:str, query:list=[], data:dict={}):
-        """
-        The function `update_data_entry_in_file_cabinet` updates the data fields of a document in a file
-        cabinet using the provided document ID and data dictionary.
-        
-        :param file_cabinet: The `file_cabinet` parameter is the name or ID of the file cabinet where
-        the document is stored
-        :param docuware_id: The `docuware_id` parameter is a string that represents the specific
-        DOCUWARE_ID of the document you want to update in the file cabinet
-        :type docuware_id: str
-        :param data: The `data` parameter is a dictionary that contains the updated field values for a
-        document in the file cabinet. Each key-value pair in the dictionary represents a field name and
-        its corresponding updated value
-        example data dictionary:
-            {
-                "FIELD_ID1": "value1",
-                "FIELD_ID2": "value2",
-                ...
-            }
-        :type data: dict
-        :return: the result of the update operation. If the update is successful, it will return the
-        result of the update operation. If there is an error during the update, it will return False.
-        """
 
         # Get file cabinet
         fc = self.file_cabinet(file_cabinet)
@@ -600,6 +529,126 @@ class FileCabinet:
             )
         else:
             return _first_item_by_class(self.dialogs, SearchDialog, default=default)
+        
+    def create_data_entry(self, data:dict):
+        """
+        The function `create_data_entry` creates a data entry in a document management system using XML
+        payload.
+        
+        :param data: The `data` parameter is a dictionary that contains the field names and their
+        corresponding values for creating a data entry. Each key-value pair in the dictionary represents
+        a field name and its value
+        :type data: dict
+        :return: the result of the data entry creation. If the data entry creation is successful, it
+        will return the result. If there is a problem creating the data entry, it will return False.
+        """
+
+        xml_head = """<Document xmlns='http://dev.docuware.com/schema/public/services/platform' Id='1'>
+<Fields>"""
+        
+        xml_middle = ""
+        for key, value in data.items():
+            xml_field = f"""<Field FieldName='{key}'>
+<String>{value}</String>
+</Field>"""
+            xml_middle += xml_field
+
+        xml_foot = """</Fields>
+</Document>"""
+        
+        xml_payload = xml_head + xml_middle + xml_foot
+
+        headers = {
+            "Content-Type": "application/xml",
+            "Accept": "application/xml"
+        }
+
+        try:
+            result = self.organization.client.conn.post_text(f"{self.endpoints['documents']}", headers=headers, data=str.encode(xml_payload))
+        except Exception as e:
+            log.debug(f"Problem creating data entry:\n\n{e}")
+            return False
+        return result    
+    
+    def update_data_entry(self, query:list=[], data:dict={}):
+        """
+        The `update_data_entry` function updates the fields of a document in a file cabinet based on a
+        search query and a dictionary of field-value pairs.
+        
+        :param query: The `query` parameter is a list that represents the search query used to find the
+        document to be updated. It is optional and can be left empty if you want to update all documents
+        in the file cabinet
+        :type query: list
+        :param data: The `data` parameter is a dictionary that contains the key-value pairs of the
+        fields and their corresponding values that you want to update in the document. Each key
+        represents the field name, and the corresponding value represents the new value for that field
+        :type data: dict
+        :return: the result of the update request. If the update request is successful, it will return
+        the result of the request. If there is an error during the update, it will return False.
+        """
+
+        fc_fields = []
+        # Retrieve and extract file cabinet fields and types
+        dlg = self.search_dialog()
+        for field in dlg.fields.values():
+            fc_field = {}
+            fc_field["id"] = field.id
+            fc_field["length"] = field.length
+            fc_field["name"] = field.name
+            fc_field["type"] = field.type
+            fc_fields.append(fc_field)
+
+        # The above code is performing a search query using a search dialog. It then checks the count
+        # of the search results. If there is only one result, it retrieves the document ID of that
+        # result. If there are no results, it logs a debug message and returns False. If there are
+        # more than one result, it logs a debug message and returns False, indicating that the update
+        # request can only be executed for one document and the user needs to specify their search
+        # query.
+        dlg = self.search_dialog()
+        fc_search = dlg.search(query)
+        if fc_search.count == 1:
+            for result in fc_search:
+                document_id = result.document.id
+        elif fc_search.count < 1:
+            log.debug('Update search query returned no results, update request will not be executed.')
+            return False
+        else:
+            log.debug('Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
+            return False
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        body = {
+            "Field": []
+        }
+
+        # The above code is iterating over the items in the `data` dictionary. For each key-value
+        # pair, it creates a list called `item_element_name` using a list comprehension.
+        for key, value in data.items():
+            # The above code is creating a list called `item_element_name` using a list comprehension.
+            # It checks each element `x` in the list `fc_fields` and checks if the value of the `type`
+            # key in `x` is equal to 'Decimal'. If it is, the corresponding element in
+            # `item_element_name` is set to 'Float'. If not, it checks if the value of the `type` key
+            # is equal to 'Numeric'. If it is, the corresponding element in `item_element_name` is set
+            # to 'Integer'. If neither condition is met, the corresponding element
+            item_element_name = ['Decimal' if x['type'] == 'Decimal' else 'String' for x in fc_fields if x['id'] == key.upper()]
+            field = {
+                "FieldName": key, 
+                "Item": value, 
+                "ItemElementName": item_element_name[0]
+                }
+            body["Field"].append(field)
+
+        try:
+            #result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
+            result = self.organization.client.conn.put(f"{self.endpoints['documents']}/{document_id}/Fields", headers=headers, json=body)
+        except Exception as e:
+            log.debug(f'Error updating document data fields:\n\n{e}')
+            return False
+        return result
 
     def __str__(self):
         return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
@@ -979,19 +1028,13 @@ class Document():
 
     def delete(self, document):
         """
-        The function `delete_document_from_file_cabinet` deletes a document from a specified file
-        cabinet based on a search query, returning a boolean value indicating the success of the
-        deletion.
+        The `delete` function sends a DELETE request to a specified endpoint to delete a document, and
+        returns the result.
         
-        :param file_cabinet: The `file_cabinet` parameter is a string that represents the name or
-        identifier of the file cabinet from which you want to delete a document
-        :type file_cabinet: str
-        :param query: The `query` parameter is a list that contains the search criteria for finding the
-        document to be deleted. It is used to filter the documents in the file cabinet and retrieve the
-        specific document that needs to be deleted. The search criteria can include attributes such as
-        document name, document type, date created,
-        :type query: list
-        :return: the result of the delete request.
+        :param document: The `document` parameter in the `delete` method is the document that you want to
+        delete. It is used to specify which document should be deleted from the database
+        :return: The `delete` method returns the result of the delete operation. It will return `True` if
+        the delete operation is successful, and `False` if there is a problem deleting the document.
         """
 
         headers = {
