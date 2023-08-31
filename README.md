@@ -130,20 +130,13 @@ for result in dlg.search("DOCNO=123456"):
         docuware.write_binary_file(data, filename)
 ```
 
-Get all documents and get each documents data fields as dictionary:
-```python
-fc_data = docuwareGetFileCabinetData(org, "FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
-print(fc_data)
-```
-The _query_ parameter is optional. If omitted default value is set to emtpy list [].
-
 Create data entry in file cabinet:
 ```python
 data = {
     "FIELD1": "value1",
     "FIELD2": "value2",
 }
-response = org.create_data_entry_in_file_cabinet("FILE_CABINET_NAME", data)
+response = fc.create_data_entry(data)
 ```
 
 Update data fields of document. The _query_ parameter needs to return one single document. you can use a _for-loop_ to execute this function on multiple documents:
@@ -152,12 +145,15 @@ fields = {
     "FIELD1": "value1",
     "FIELD2": 99999
 }
-response = org.update_data_entry_in_file_cabinet("FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], fields)
+response = fc.update_data_entry(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], user_fields)
 ```
 
-Delete document specific document. The _query_ parameter needs to return one single document. you can use a _for-loop_ to execute this function on multiple documents:
+Delete document(s):
 ```python
-response = org.delete_document_from_file_cabinet("FILE_CABINET_NAME", ["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
+dlg = fc.search_dialog()
+for result in dlg.search(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"]):
+    document = result.document
+    document.delete(document)
 ```
 
 Users and groups of an organisation can be accessed and managed:
