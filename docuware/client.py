@@ -941,6 +941,9 @@ class Document():
         self.attachments = [DocumentAttachment(s, self) for s in config.get("Sections", [])]
         self.fields = [FieldValue.from_config(f) for f in config.get("Fields", [])]
 
+    def field(self, key:str, default:Union[Any,None]=NOTHING):
+        return _first_item_by_id_or_name(self.fields, key, default=default)
+
     @staticmethod
     def _download(client:DocuwareClient, endpoint:str, keep_annotations:bool=True) -> Tuple[bytes,str,str]:
         return client.conn.get_bytes(endpoint, data={
