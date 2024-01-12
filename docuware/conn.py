@@ -122,6 +122,22 @@ class Connection:
     def get_text(self, path:str, headers:Dict[str,str]=None):
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
         return self.get(path, headers=headers).text
+    
+    def _delete(self, url:str, headers:Dict[str,str]=None, params:Any=None, json:dict=None, data:Any=None):
+        headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
+        return self.session.delete(url, headers=headers, params=params, json=json, data=data)
+
+    def delete(self, path:str, headers:Dict[str,str]=None):
+        url = self.make_url(path)
+        resp = self._delete(url, headers=headers)
+        if resp.status_code==200:
+            return resp
+        else:
+            raise errors.ResourceError(
+                f"DELETE request failed with code {resp.status_code}",
+                url=url,
+                status_code=resp.status_code
+            )
 
     def get_bytes(self, path:str, mime_type:str=None, data:Any=None) -> Tuple[bytes,str,str]:
         url = self.make_url(path)

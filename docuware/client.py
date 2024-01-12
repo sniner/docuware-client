@@ -1,10 +1,11 @@
-import re, json
+import re, json, logging
 
 from datetime import datetime, date
 from typing import Any, Dict, Iterator, List, Tuple, Type, Union
 
 from docuware import cidict, cijson, conn, errors, parser, structs, utils
 
+log = logging.getLogger(__name__)
 
 def print_json(data):
     cijson.print_json(data)
@@ -202,7 +203,7 @@ class Organization:
         try:
             result = self.client.conn.post_json(self.endpoints['userInfo'], headers=headers, json=user_dict)
         except Exception as e:
-            print(f'Error creating user:\n\n{e}')
+            log.debug(f'Problem creating user:\n\n{e}')
             return False
         return result
 
@@ -236,7 +237,7 @@ class Organization:
         try:
             result = self.client.conn.put('/DocuWare/Platform/Organization/UserGroups', headers=headers, params={"UserId": user.id}, json=body)
         except Exception as e:
-            print(f'Error adding group to user:\n\n{e}')
+            log.debug(f'Problem adding group to user:\n\n{e}')
             return False
         return result
     
@@ -268,7 +269,7 @@ class Organization:
         try:
             result = self.client.conn.put('/DocuWare/Platform/Organization/UserGroups', headers=headers, params={"UserId": user.id}, json=body)
         except Exception as e:
-            print(f'Error removing group from user:\n\n{e}')
+            log.debug(f'Problem removing group from user:\n\n{e}')
             return False
         return result
 
@@ -311,7 +312,7 @@ class Organization:
         try:
             result = self.client.conn.post_text(self.endpoints['userInfo'], headers=headers, json=body)
         except Exception as e:
-            print(f'Error deactivating user:\n\n{e}')
+            log.debug(f'Problem deactivating user:\n\n{e}')
             return False
         return result
     
@@ -353,7 +354,7 @@ class Organization:
         try:
             result = self.client.conn.post_text(self.endpoints['userInfo'], headers=headers, json=body)
         except Exception as e:
-            print(f'Error activating user:\n\n{e}')
+            log.debug(f'Problem activating user:\n\n{e}')
             return False
         return result
 
@@ -465,6 +466,126 @@ class FileCabinet:
             )
         else:
             return _first_item_by_class(self.dialogs, SearchDialog, default=default)
+        
+    def create_data_entry(self, data:dict):
+        """
+        The function `create_data_entry` creates a data entry in a document management system using XML
+        payload.
+        
+        :param data: The `data` parameter is a dictionary that contains the field names and their
+        corresponding values for creating a data entry. Each key-value pair in the dictionary represents
+        a field name and its value
+        :type data: dict
+        :return: the result of the data entry creation. If the data entry creation is successful, it
+        will return the result. If there is a problem creating the data entry, it will return False.
+        """
+
+        xml_head = """<Document xmlns='http://dev.docuware.com/schema/public/services/platform' Id='1'>
+<Fields>"""
+        
+        xml_middle = ""
+        for key, value in data.items():
+            xml_field = f"""<Field FieldName='{key}'>
+<String>{value}</String>
+</Field>"""
+            xml_middle += xml_field
+
+        xml_foot = """</Fields>
+</Document>"""
+        
+        xml_payload = xml_head + xml_middle + xml_foot
+
+        headers = {
+            "Content-Type": "application/xml",
+            "Accept": "application/xml"
+        }
+
+        try:
+            result = self.organization.client.conn.post_text(f"{self.endpoints['documents']}", headers=headers, data=str.encode(xml_payload))
+        except Exception as e:
+            log.debug(f"Problem creating data entry:\n\n{e}")
+            return False
+        return result    
+    
+    def update_data_entry(self, query:list=[], data:dict={}):
+        """
+        The `update_data_entry` function updates the fields of a document in a file cabinet based on a
+        search query and a dictionary of field-value pairs.
+        
+        :param query: The `query` parameter is a list that represents the search query used to find the
+        document to be updated. It is optional and can be left empty if you want to update all documents
+        in the file cabinet
+        :type query: list
+        :param data: The `data` parameter is a dictionary that contains the key-value pairs of the
+        fields and their corresponding values that you want to update in the document. Each key
+        represents the field name, and the corresponding value represents the new value for that field
+        :type data: dict
+        :return: the result of the update request. If the update request is successful, it will return
+        the result of the request. If there is an error during the update, it will return False.
+        """
+
+        fc_fields = []
+        # Retrieve and extract file cabinet fields and types
+        dlg = self.search_dialog()
+        for field in dlg.fields.values():
+            fc_field = {}
+            fc_field["id"] = field.id
+            fc_field["length"] = field.length
+            fc_field["name"] = field.name
+            fc_field["type"] = field.type
+            fc_fields.append(fc_field)
+
+        # The above code is performing a search query using a search dialog. It then checks the count
+        # of the search results. If there is only one result, it retrieves the document ID of that
+        # result. If there are no results, it logs a debug message and returns False. If there are
+        # more than one result, it logs a debug message and returns False, indicating that the update
+        # request can only be executed for one document and the user needs to specify their search
+        # query.
+        dlg = self.search_dialog()
+        fc_search = dlg.search(query)
+        if fc_search.count == 1:
+            for result in fc_search:
+                document_id = result.document.id
+        elif fc_search.count < 1:
+            log.debug('Update search query returned no results, update request will not be executed.')
+            return False
+        else:
+            log.debug('Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
+            return False
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+
+        body = {
+            "Field": []
+        }
+
+        # The above code is iterating over the items in the `data` dictionary. For each key-value
+        # pair, it creates a list called `item_element_name` using a list comprehension.
+        for key, value in data.items():
+            # The above code is creating a list called `item_element_name` using a list comprehension.
+            # It checks each element `x` in the list `fc_fields` and checks if the value of the `type`
+            # key in `x` is equal to 'Decimal'. If it is, the corresponding element in
+            # `item_element_name` is set to 'Float'. If not, it checks if the value of the `type` key
+            # is equal to 'Numeric'. If it is, the corresponding element in `item_element_name` is set
+            # to 'Integer'. If neither condition is met, the corresponding element
+            item_element_name = ['Decimal' if x['type'] == 'Decimal' else 'String' for x in fc_fields if x['id'] == key.upper()]
+            field = {
+                "FieldName": key, 
+                "Item": value, 
+                "ItemElementName": item_element_name[0]
+                }
+            body["Field"].append(field)
+
+        try:
+            #result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
+            result = self.organization.client.conn.put(f"{self.endpoints['documents']}/{document_id}/Fields", headers=headers, json=body)
+        except Exception as e:
+            log.debug(f'Error updating document data fields:\n\n{e}')
+            return False
+        return result
 
     def __str__(self):
         return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
@@ -713,7 +834,7 @@ class SearchResultItem:
         if self._document is None:
             dw = self.result.query.dialog.client
             config = dw.conn.get_json(self.endpoints["self"])
-            self._document = Document(config, self.result.query.dialog.file_cabinet)
+            self._document = Document(config, self.result.query.dialog.file_cabinet, dw)
         return self._document
 
     def __str__(self):
@@ -806,8 +927,9 @@ FieldValue.TYPE_TABLE = cidict.CaseInsensitiveDict({
 })
 
 
-class Document:
-    def __init__(self, config:dict, file_cabinet:FileCabinet):
+class Document():
+    def __init__(self, config:dict, file_cabinet:FileCabinet, client:DocuwareClient):
+        self.client = client
         self.file_cabinet = file_cabinet
         self.id = config.get("Id")
         self.title = config.get("Title")
@@ -843,6 +965,29 @@ class Document:
     def download_all(self) -> Tuple[bytes,str,str]:
         dw = self.file_cabinet.organization.client
         return dw.conn.get_bytes(self.endpoints["downloadAsArchive"])
+
+    def delete(self, document):
+        """
+        The `delete` function sends a DELETE request to a specified endpoint to delete a document, and
+        returns the result.
+        
+        :param document: The `document` parameter in the `delete` method is the document that you want to
+        delete. It is used to specify which document should be deleted from the database
+        :return: The `delete` method returns the result of the delete operation. It will return `True` if
+        the delete operation is successful, and `False` if there is a problem deleting the document.
+        """
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        try:
+            result = self.client.conn.delete(f"{self.endpoints['self']}", headers=headers)
+        except Exception as e:
+            log.debug(f"Problem deleting document:\n\n{e}")
+            return False
+        return result
 
     def __str__(self):
         return f"{self.__class__.__name__} '{self.title}' [{self.id}]"

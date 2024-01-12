@@ -72,6 +72,21 @@ for field in dlg.fields.values():
     print(field)
 ```
 
+Get file cabinet fields as list:
+```python
+dlg = fc.search_dialog()
+fc_fields = []
+for field in dlg.fields.values():
+    fc_field = {}
+    fc_field["id"] = field.id
+    fc_field["length"] = field.length
+    fc_field["name"] = field.name
+    fc_field["type"] = field.type
+    fc_fields.append(fc_field)
+
+print(fc_fields)
+```
+
 Let's search for some documents:
 
 ```python
@@ -113,6 +128,32 @@ for result in dlg.search("DOCNO=123456"):
     for att in doc.attachments:
         data, content_type, filename = att.download()
         docuware.write_binary_file(data, filename)
+```
+
+Create data entry in file cabinet:
+```python
+data = {
+    "FIELD1": "value1",
+    "FIELD2": "value2",
+}
+response = fc.create_data_entry(data)
+```
+
+Update data fields of document. The _query_ parameter needs to return one single document. you can use a _for-loop_ to execute this function on multiple documents:
+```python
+fields = {
+    "FIELD1": "value1",
+    "FIELD2": 99999
+}
+response = fc.update_data_entry(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], user_fields)
+```
+
+Delete document(s):
+```python
+dlg = fc.search_dialog()
+for result in dlg.search(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"]):
+    document = result.document
+    document.delete(document)
 ```
 
 Users and groups of an organisation can be accessed and managed:
