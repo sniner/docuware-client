@@ -4,6 +4,7 @@ Case-insensitive dictionary.
 Almost identical to CaseInsensitiveDict() of requests (https://github.com/psf/requests)
 """
 
+from __future__ import annotations
 from collections.abc import MutableMapping
 from typing import Any, Generator, Optional, Tuple
 
@@ -79,6 +80,5 @@ class CaseInsensitiveDict(MutableMapping):
 
     def __repr__(self):
         return str(dict(self.items()))
-
 
 # vim: set et sw=4 ts=4:

@@ -2,7 +2,6 @@ import argparse
 import json
 import pathlib
 import sys
-
 from typing import Optional
 
 import docuware
@@ -121,7 +120,7 @@ def parse_arguments():
 
 
 def indent(n: int) -> str:
-    return " " * (n*4-1)
+    return " " * (n * 4 - 1)
 
 
 def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
@@ -145,7 +144,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
 
     for n, item in enumerate(res):
         doc = item.document
-        print(f"[{n+1}]", doc)
+        print(f"[{n + 1}]", doc)
         if args.download in ("document", "all"):
             data, mime, fname = doc.download(keep_annotations=args.annotations)
             docuware.write_binary_file(data, fname)
@@ -162,7 +161,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
                 docuware.write_binary_file(data, fname)
 
 
-def list_cmd(dw:docuware.Client, args:argparse.Namespace) -> Optional[int]:
+def list_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     def show_field(fld):
         print(indent(3), fld)
         if args.field and fld.name.casefold() == args.field:
@@ -182,7 +181,7 @@ def list_cmd(dw:docuware.Client, args:argparse.Namespace) -> Optional[int]:
                 print(indent(2), dlg)
 
     def show_filecabinet(fc):
-        if args.file_cabinet is None or fc.name.casefold()==args.file_cabinet:
+        if args.file_cabinet is None or fc.name.casefold() == args.file_cabinet:
             print(indent(1), fc)
             for dlg in fc.dialogs:
                 show_dialog(dlg)

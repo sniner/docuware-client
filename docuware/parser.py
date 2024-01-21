@@ -1,12 +1,12 @@
+from __future__ import annotations
 import collections
-
 from typing import List, Optional, Tuple, Union
 
 from docuware import cidict
 
 
 class CharReader:
-    def __init__(self, text:str):
+    def __init__(self, text: str):
         self.text = text
         self._itext = iter(text)
         self._unget_buffer = collections.deque()
@@ -17,7 +17,7 @@ class CharReader:
         else:
             return next(self._itext, None)
 
-    def ungetch(self, char:str):
+    def ungetch(self, char: str):
         if char is not None:
             self._unget_buffer.append(char)
 
@@ -30,7 +30,7 @@ class CharReader:
         return f"CharReader({repr(self.text)})"
 
 
-def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dict,cidict.CaseInsensitiveDict]:
+def parse_content_disposition(text: str, case_insensitive: bool = True) -> Union[dict, cidict.CaseInsensitiveDict]:
     """
     Parser for HTTP Content-Disposition header values. For example 'attachment; filename="filename.jpg"' will
     return { type: "attachment", filename: "filename.jpg" }.
@@ -51,7 +51,7 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
     while True:
         ch = reader.getch()
         # print(state, ch)
-        if state == 0: # type identifier
+        if state == 0:  # type identifier
             if ch is None:
                 break
             elif ch.isspace():
@@ -69,7 +69,7 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
                 break
             else:
                 value += ch
-        elif state == 10: # key/value pair
+        elif state == 10:  # key/value pair
             if ch is None:
                 break
             if ch.isspace() or ch == ";":
@@ -81,7 +81,7 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
                 state = 11
             else:
                 raise ValueError
-        elif state == 11: # key of key/value pair
+        elif state == 11:  # key of key/value pair
             if ch == "=":
                 key = key.rstrip()
                 state = 20
@@ -89,7 +89,7 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
                 key += ch
             else:
                 raise ValueError
-        elif state == 20: # value of key/value pair
+        elif state == 20:  # value of key/value pair
             if ch is None or ch == ";":
                 fields[key] = value
                 state = 10
@@ -100,13 +100,13 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
             else:
                 reader.ungetch(ch)
                 state = 21
-        elif state == 21: # plain value
+        elif state == 21:  # plain value
             if ch is None or ch.isspace() or ch == ";":
                 fields[key] = value
                 state = 10
             else:
                 value += ch
-        elif state == 25: # value in quotation marks
+        elif state == 25:  # value in quotation marks
             if ch is None:
                 # unexpected, but ...
                 fields[key] = value
@@ -116,7 +116,7 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
                 state = 26
             else:
                 value += ch
-        elif state == 26: # expecting semicolon
+        elif state == 26:  # expecting semicolon
             if ch is None:
                 break
             elif ch == ";":
@@ -129,7 +129,7 @@ def parse_content_disposition(text:str, case_insensitive:bool=True) -> Union[dic
     return fields
 
 
-def parse_search_condition(text:str) -> Tuple[str,List[str]]:
+def parse_search_condition(text: str) -> Tuple[str, List[str]]:
     """
     Parser for search conditions. Examples:
         fieldname=keyword
@@ -149,7 +149,7 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
     while True:
         ch = reader.getch()
         # print(state, ch)
-        if state == 0: # before fieldname
+        if state == 0:  # before fieldname
             if ch is None:
                 break
             elif ch.isspace():
@@ -158,7 +158,7 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
                 reader.ungetch(ch)
                 value = ""
                 state = 1
-        elif state == 1: # fieldname
+        elif state == 1:  # fieldname
             if ch is None:
                 fieldname = value
                 break
@@ -168,7 +168,7 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
                 state = 2
             else:
                 value += ch
-        elif state == 2: # after fieldname
+        elif state == 2:  # after fieldname
             if ch is None:
                 break
             elif ch.isspace():
@@ -177,7 +177,7 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
                 state = 10
             else:
                 raise ValueError(f"Unexpected character found: '{ch}'")
-        elif state == 10: # before keyword
+        elif state == 10:  # before keyword
             value = ""
             if ch is None:
                 break
@@ -190,13 +190,13 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
             else:
                 reader.ungetch(ch)
                 state = 11
-        elif state == 11: # keyword
+        elif state == 11:  # keyword
             if ch is None or ch == ",":
                 value = value.rstrip()
                 state = 30
             else:
                 value += ch
-        elif state == 20: # "keyword"
+        elif state == 20:  # "keyword"
             if ch is None or ch == "\"":
                 # unexpected end
                 state = 30
@@ -204,7 +204,7 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
                 value += reader.getch() or ""
             else:
                 value += ch
-        elif state == 30: # after keyword
+        elif state == 30:  # after keyword
             if value:
                 keywords.append(value)
             if ch is None:
@@ -215,6 +215,4 @@ def parse_search_condition(text:str) -> Tuple[str,List[str]]:
 
     return fieldname, keywords
 
-
 # vim: set et sw=4 ts=4:
-

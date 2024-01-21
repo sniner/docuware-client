@@ -1,8 +1,9 @@
+from __future__ import annotations
 from typing import Optional
 
 
 class DocuwareClientException(Exception):
-    def __init__(self, *args, url:Optional[str]=None, status_code:Optional[int]=None):
+    def __init__(self, *args, url: Optional[str] = None, status_code: Optional[int] = None):
         super().__init__(*args)
         self.url = url
         self.status_code = status_code
@@ -41,5 +42,8 @@ class ResourceError(ApiError):
 class ResourceNotFoundError(ApiError):
     pass
 
+
+class UserOrGroupError(ApiError):
+    pass
 
 # vim: set et sw=4 ts=4:

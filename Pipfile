@@ -8,6 +8,5 @@ requests = "*"
 
 [dev-packages]
 docuware-client = {editable = true, path = "."}
-nose2 = "*"
 pytest = "*"
 pylint = "*"

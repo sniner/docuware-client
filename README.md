@@ -1,11 +1,17 @@
 # docuware-client
 
-This is a client library for the REST API of [DocuWare][1] DMS. Since [DocuWare's documentation][2] regarding the REST
-API is very sparse (at the time these lines were written), this client serves only a part of the API's functionality.
+This is a client library for the REST API of [DocuWare][1] DMS. Since
+[DocuWare's documentation][2] regarding the REST API is very sparse (at the
+time these lines were written), this client serves only a part of the API's
+functionality.
 
-Please keep in mind: This software is not related to DocuWare. It is a work in progress, may yield unexpected results,
-and almost certainly contains bugs.
+Please keep in mind: **This software is not related to DocuWare.** It is a work
+in progress, may yield unexpected results, and almost certainly contains bugs.
 
+> [!NOTE] Version 0.4.x has only been partially tested and is subject to
+> extensive refactoring. If you require a better tested release, it is
+> recommended that you use 0.2.x or 0.3.x. However, I recommend that you try
+> the latest 0.4 release first.
 
 ## Usage
 
@@ -22,9 +28,10 @@ with open(".session", "w") as f:
     json.dump(session, f)
 ```
 
-From then on you have to reuse the session, otherwise you will be locked out of the DocuWare server for a period of
-time (10 minutes or longer). As the session cookie may change on subsequent logins, update the session file on every
-login.
+From then on you have to reuse the session, otherwise you will be locked out of
+the DocuWare service for a period of time (10 minutes or even longer). As the
+session cookie may change on subsequent logins, update the session file on
+every login.
 
 ```python
 session_file = pathlib.Path(".session")
@@ -48,14 +55,16 @@ for org in dw.organizations:
         print("   ", fc)
 ```
 
-If you already know the ID or name of the objects, you can also access them directly.
+If you already know the ID or name of the objects, you can also access them
+directly.
 
 ```python
 org = dw.organization("1")
 fc = org.file_cabinet("Archive")
 ```
 
-Now some examples of how to search for documents. First you need a search dialog:
+Now some examples of how to search for documents. First you need a search
+dialog:
 
 ```python
 # Let's use the first one:
@@ -64,27 +73,16 @@ dlg = fc.search_dialog()
 dlg = fc.search_dialog("Default search dialog")
 ```
 
-Each search term consists of a field name and a search pattern. Each search dialog
-knows its fields:
+Each search term consists of a field name and a search pattern. Each search
+dialog knows its fields:
 
 ```python
 for field in dlg.fields.values():
-    print(field)
-```
-
-Get file cabinet fields as list:
-```python
-dlg = fc.search_dialog()
-fc_fields = []
-for field in dlg.fields.values():
-    fc_field = {}
-    fc_field["id"] = field.id
-    fc_field["length"] = field.length
-    fc_field["name"] = field.name
-    fc_field["type"] = field.type
-    fc_fields.append(fc_field)
-
-print(fc_fields)
+    print("Id    =", field.id)
+    print("Length=", field.length)
+    print("Name  =", field.name)
+    print("Type  =", field.type)
+    print("-------")
 ```
 
 Let's search for some documents:
@@ -96,27 +94,32 @@ for result in dlg.search("DOCNO=123456"):
 # Search for two patterns alternatively:
 for result in dlg.search(["DOCNO=123456", "DOCNO=654321"], operation=docuware.OR):
     print(result)
+# Search for documents in a date range (01-31 January 2023):
+for result in dlg.search("DWSTOREDATETIME=2023-01-01T00:00:00,2023-02-01T00:00:00")
+    print(result)
 ```
 
-Please note that search terms may also contain metacharacters such as `*`, `(`, `)`, which may need to be escaped when
-searching for these characters themselves.
+Please note that search terms may also contain metacharacters such as `*`, `(`,
+`)`, which may need to be escaped when searching for these characters
+themselves.
 
 ```python
 for result in dlg.search("DOCTYPE=Invoice \\(incoming\\)"):
     print(result)
 ```
 
-Search terms can be as simple as a single string, but can also be more complex. The following two queries
-are equivalent:
+Search terms can be as simple as a single string, but can also be more complex.
+The following two queries are equivalent:
 
 ```python
 dlg.search(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
 dlg.search({"FIELD1": ["TERM1", "TERM2"], "FIELD2": ["TERM3"]})
 ```
 
-The result of a search is always an iterator over the search results, even if no result was obtained.
-Each individual search result holds a `document` attribute, which gives access to the document in the archive.
-The document itself can be downloaded as a whole or only individual attachments.
+The result of a search is always an iterator over the search results, even if
+no result was obtained. Each individual search result holds a `document`
+attribute, which gives access to the document in the archive. The document
+itself can be downloaded as a whole or only individual attachments.
 
 ```python
 for result in dlg.search("DOCNO=123456"):
@@ -139,7 +142,10 @@ data = {
 response = fc.create_data_entry(data)
 ```
 
-Update data fields of document. The _query_ parameter needs to return one single document. you can use a _for-loop_ to execute this function on multiple documents:
+_Subject to rewrite:_ Update data fields of document. The search parameter must
+return a single document. Use a loop to execute this function on multiple
+documents:
+
 ```python
 fields = {
     "FIELD1": "value1",
@@ -148,12 +154,13 @@ fields = {
 response = fc.update_data_entry(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], user_fields)
 ```
 
-Delete document(s):
+Delete documents:
+
 ```python
 dlg = fc.search_dialog()
 for result in dlg.search(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"]):
     document = result.document
-    document.delete(document)
+    document.delete()
 ```
 
 Users and groups of an organisation can be accessed and managed:
@@ -166,23 +173,27 @@ for group in org.groups:
     print(group)
 
 # Find a specific user:
-user = org.get_user("Doe, John")
+user = org.users["John Doe"]  # or: org.users.get("John Doe")
 
 # Add a user to a group:
-org.add_group_to_user("Finance", "Doe, John")
+group = org.groups["Managers"]  # or: org.groups.get("Managers")
+group.add_user(user)
+# or
+user.add_to_group(group)
 
-# Deactivate/activate a user:
-org.deactivate_user("Doe, John")
-org.activate_user("Doe, John")
+# Deactivate user:
+user.active = False # or True to activate user
+
+# Create a new user:
+user = docuware.User(first_name="John", last_name="Doe")
+org.users.add(user, password="123456")
 ```
-
-For more details please use `help(docuware.client.Organization)`.
 
 
 ## CLI usage
 
-This package also includes a simple CLI program for collecting information about the archive and searching and
-downloading documents or attachments.
+This package also includes a simple CLI program for collecting information
+about the archive and searching and downloading documents or attachments.
 
 First you need to log in:
 
@@ -190,7 +201,8 @@ First you need to log in:
 $ dw-client login --url http://localhost/ --username "Doe, John" --password FooBar --organization "Doe Inc."
 ```
 
-The credentials and the session cookie are stored in the `.credentials` and `.session` files in the current directory.
+The credentials and the session cookie are stored in the `.credentials` and
+`.session` files in the current directory.
 
 Of course, `--help` will give you a list of all options:
 
@@ -251,8 +263,8 @@ $ dw-client list --file-cabinet Archive --dialog custom --field DocNo
 
 ## License
 
-This work is released under the BSD 3 license. You may use and redistribute this software as long as the copyright
-notice is preserved.
+This work is released under the BSD 3 license. You may use and redistribute
+this software as long as the copyright notice is preserved.
 
 
 [1]: https://docuware.com/
