@@ -201,6 +201,7 @@ def tasks_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
         print(org)
         for task in org.my_tasks:
             print(indent(1), task)
+    return 0
 
 
 def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
@@ -216,6 +217,7 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
         print(indent(1), "Email:", org.info.get("EMail"))
         print(indent(1), "System number:", org.info.get("SystemNumber"))
         print(indent(1), "Runtime:", org.info.get("RuntimeVersion"), org.info.get("OrganizationType"))
+    return 0
 
 
 def main():

@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Iterator, Union, List, Tuple, Dict
 
-from docuware import cidict, utils
+from docuware import cidict, errors, utils
 
 log = logging.getLogger(__name__)
 

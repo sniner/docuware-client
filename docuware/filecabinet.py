@@ -38,7 +38,7 @@ class FileCabinet(types.FileCabinetP):
                 default=default
             )
         else:
-            return _first_item_by_class(self.dialogs, SearchDialog, default=default)
+            return structs.first_item_by_class(self.dialogs, dialogs.SearchDialog, default=default)
 
     # This method from PR#4 needs a complete rewrite
     def create_data_entry(self, data: dict):

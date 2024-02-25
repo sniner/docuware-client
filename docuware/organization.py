@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import Generator, List, Optional, TypeVar, Union
 
-from docuware import cidict, conn, structs, types, users, filecabinet
+from docuware import cidict, conn, dialogs, structs, types, users, filecabinet
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class Organization(types.OrganizationP):
             fc_by_id = {fc.id: fc for fc in self.file_cabinets}
             result = self.client.conn.get_json(self.endpoints["dialogs"])
             self._dialogs = [
-                Dialog.from_config(dlg, fc_by_id[dlg.get("FileCabinetId")]) for dlg in result.get("Dialog", [])
+                dialogs.Dialog.from_config(dlg, fc_by_id[dlg.get("FileCabinetId")]) for dlg in result.get("Dialog", [])
                 if dlg.get("$type") == "DialogInfo" and dlg.get("FileCabinetId") in fc_by_id
             ]
         return self._dialogs

@@ -4,7 +4,7 @@ import re
 from datetime import datetime, date
 from typing import Any, Iterator, Union, List, Optional, Tuple, Dict
 
-from docuware import conn, parser, structs, types, utils, document, fields
+from docuware import conn, errors, parser, structs, types, utils, document, fields
 
 log = logging.getLogger(__name__)
 

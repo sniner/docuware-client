@@ -1,10 +1,15 @@
 from __future__ import annotations
+import logging
 from typing import Dict, Generator, Optional, Union
 
 import re
 import requests
 
 from . import errors, types, structs, utils
+
+
+log = logging.getLogger(__name__)
+
 
 
 class User:
@@ -123,7 +128,7 @@ class User:
     @active.setter
     def active(self, state: bool):
         if self.active != state:
-            if not u.id:
+            if not self.id:
                 raise errors.UserOrGroupError(f"Not a registered user: {self}")
             body = self.as_dict(overrides={"Active": state})
             try:
@@ -209,7 +214,7 @@ class Group:
         result = self.organization.client.conn.get_json(self.endpoints["users"])
         return (User.from_response(u, self.organization) for u in result.get("User", []))
 
-    # FIXME: Testing needed, the endpoint look very suspicious
+    # FIXME: Testing needed, the endpoint looks very suspicious
     def _set_user_membership(self, user: User, include: bool):
         if not self.id:
             # FIXME: raise a better suited exception
@@ -225,7 +230,7 @@ class Group:
 
         body = {
             "Ids": [
-                group.id
+                self.id
             ],
             "OperationType": "Add" if include else "Remove"
         }

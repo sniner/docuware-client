@@ -54,7 +54,7 @@ class FileCabinetP(Protocol):
 
 class DialogP(Protocol):
     @staticmethod
-    def from_config(config: dict, file_cabinet: FileCabinet) -> DialogP:
+    def from_config(config: dict, file_cabinet: FileCabinetP) -> DialogP:
         ...
 
 
