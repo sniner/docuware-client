@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "docuware-client"
+version = "0.4.2"
+description = "DocuWare REST-API client"
+authors = ["Stefan Schönberger <mail@sniner.dev>"]
+readme = "README.md"
+packages = [{ include = "docuware" }]
+license = "BSD-3-Clause"
+repository = "https://github.com/sniner/docuware-client"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+requests = "^2.32.3"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.3.1"
+pytest = "^8.2.2"
+
+[tool.pytest.ini_options]
+addopts = "-ra -q"
+testpaths = ["tests"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+dw-client = "docuware.cli.dw:main"
