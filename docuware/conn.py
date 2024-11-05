@@ -1,9 +1,20 @@
 from __future__ import annotations
+import logging
 import requests
 import urllib.parse as urlparse
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 from docuware import cijson, errors, parser, utils
+
+from urllib3.exceptions import InsecureRequestWarning
+from urllib3 import disable_warnings
+
+from docuware.organization import Organization
+disable_warnings(InsecureRequestWarning)
+
+
+log = logging.getLogger(__name__)
+
 
 DEFAULT_HEADERS = {
     "User-Agent": "Python docuware-client",
@@ -18,26 +29,132 @@ TEXT_HEADERS = {
     "Accept": "text/plain",
 }
 
+class Authenticator(Protocol):
+    def authenticate(self, conn: Connection) -> requests.Session:
+        ...
+
+    def login(self, conn: Connection) -> dict:
+        ...
+
+class CookieAuthenticator(Authenticator):
+    def __init__(
+        self,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        organization: Optional[str] = None,
+        saved_state: Optional[dict] = None,
+    ):
+        self.password = password
+        self.username = username
+        self.organization = organization
+        self.cookies = saved_state
+        self.result: Optional[dict] = None
+        self._warn = True
+
+    def authenticate(self, conn: Connection) -> requests.Session:
+        if self.cookies:
+            log.debug("Authenticating with cookies")
+            conn.session.cookies.update(self.cookies)
+        else:
+            if self._warn:
+                log.warning("Cookie authentication not available")
+                self._warn = False
+        return conn.session
+
+    def login(self, conn: Connection) -> dict:
+        endpoint = "/DocuWare/Platform/Account/Logon"
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        }
+        data = {
+            "LoginType": "DocuWare",
+            "RedirectToMyselfInCaseOfError": "false",
+            "RememberMe": "false",
+            "Password": self.password,
+            "UserName": self.username,
+        }
+        if self.organization:
+            data["Organization"] = self.organization
+
+        try:
+            self.result = conn.post_json(endpoint, headers=headers, data=data)
+            self.cookies = requests.utils.dict_from_cookiejar(conn.session.cookies)
+            return self.cookies
+        except errors.ResourceError as exc:
+            raise errors.AccountError(f"Log in failed with code {exc.status_code}")
+
+class OAuth2Authenticator(Authenticator):
+    def __init__(
+        self,
+        username: Optional[str],
+        password: Optional[str],
+        organization: Optional[str] = None,
+        saved_state: Optional[dict] = None,
+    ):
+        self.password = password
+        self.username = username
+        self.organization = organization
+        self.token = (saved_state or {}).get("access_token")
+        self.result: dict = {}
+
+    def _apply_access_token(self, conn: Connection, token: Optional[str]) -> None:
+        if token:
+            conn.session.headers.update({
+               "Authorization": f"Bearer {token}"
+            })
+
+    def _get_access_token(self, conn: Connection) -> Optional[str]:
+        endpoint = "/DocuWare/Identity/connect/token"
+        data = {
+            "grant_type": "password",
+            "username": self.username,
+            "password": self.password,
+            "client_id": "docuware.platform.net.client",
+            "scope": "docuware.platform"
+        }
+        try:
+            log.debug("Requesting access token")
+            self.result = conn.post_json(endpoint, data=data) or {}
+            token = self.result.get("access_token")
+            if not token:
+               raise errors.ResourceError(status_code=0)
+            return token
+        except errors.ResourceError as exc:
+            log.warning("Failed to get access token (%s)", exc.status_code)
+        return None
+
+    def authenticate(self, conn: Connection) -> requests.Session:
+        self.token = self._get_access_token(conn)
+        self._apply_access_token(conn, self.token)
+        return conn.session
+
+    def login(self, conn: Connection) -> dict:
+        if self.token:
+            self._apply_access_token(conn, self.token)
+        else:
+            if "Authorization" in conn.session.headers:
+                del conn.session.headers["Authorization"]
+        conn.session = self.authenticate(conn)
+        return {
+            "access_token": self.token,
+        }
+
 
 class Connection:
-    def __init__(self, base_url: str, case_insensitive: bool = True, cookiejar: dict = None):
+    def __init__(
+        self,
+        base_url: str,
+        case_insensitive: bool = True,
+        verify_certificate: bool = True,
+        authenticator: Optional[Authenticator] = None,
+    ):
         self.base_url = base_url
         self.session = requests.Session()
-        self.cookiejar = cookiejar
+        self.session.verify = verify_certificate
+        self.authenticator = authenticator
         self._json_object_hook = cijson.case_insensitive_hook if case_insensitive else None
-
-    @property
-    def cookiejar(self):
-        if self.session:
-            cookies = requests.utils.dict_from_cookiejar(self.session.cookies)
-        else:
-            cookies = {}
-        return cookies
-
-    @cookiejar.setter
-    def cookiejar(self, cookies: dict):
-        if cookies:
-            self.session.cookies.update(cookies)
 
     def make_path(self, path: str, query: dict) -> str:
         u = urlparse.urlsplit(path)
@@ -53,7 +170,11 @@ class Connection:
 
     def _post(self, url: str, headers: Optional[Dict[str, str]] = None, json: Optional[dict] = None, data: Optional[Any] = None):
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        return self.session.post(url, headers=headers, json=json, data=data)
+        resp = self.session.post(url, headers=headers, json=json, data=data)
+        if resp.status_code in (401, 403) and self.authenticator:
+            self.session = self.authenticator.authenticate(self)
+            resp = self.session.post(url, headers=headers, json=json, data=data)
+        return resp
 
     def post(self, path: str, headers: Optional[Dict[str, str]] = None, json: Optional[dict] = None, data: Optional[Any] = None):
         url = self.make_url(path)
@@ -77,7 +198,11 @@ class Connection:
 
     def _put(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None, data: Optional[Any] = None):
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        return self.session.put(url, headers=headers, params=params, json=json, data=data)
+        resp = self.session.put(url, headers=headers, params=params, json=json, data=data)
+        if resp.status_code in (401, 403) and self.authenticator:
+            self.session = self.authenticator.authenticate(self)
+            resp = self.session.put(url, headers=headers, params=params, json=json, data=data)
+        return resp
 
     def put(self, path: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None, data: Optional[Any] = None):
         url = self.make_url(path)
@@ -104,7 +229,11 @@ class Connection:
 
     def _get(self, url: str, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None):
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        return self.session.get(url, headers=headers, data=data)
+        resp = self.session.get(url, headers=headers, data=data)
+        if resp.status_code in (401, 403) and self.authenticator:
+            self.session = self.authenticator.authenticate(self)
+            resp = self.session.get(url, headers=headers, data=data)
+        return resp
 
     def get(self, path: str, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None):
         url = self.make_url(path)
@@ -129,7 +258,11 @@ class Connection:
     def _delete(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None,
                 data: Optional[Any] = None):
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        return self.session.delete(url, headers=headers, params=params, json=json, data=data)
+        resp = self.session.delete(url, headers=headers, params=params, json=json, data=data)
+        if resp.status_code in (401, 403) and self.authenticator:
+            self.session = self.authenticator.authenticate(self)
+            resp = self.session.delete(url, headers=headers, params=params, json=json, data=data)
+        return resp
 
     def delete(self, path: str, headers: Optional[Dict[str, str]] = None):
         url = self.make_url(path)

@@ -28,7 +28,7 @@ class DocuwareClientP(Protocol):
     def organization(self, key: str, default: Union[OrganizationP, None, Nothing] = NOTHING) -> Optional[OrganizationP]:
         ...
 
-    def login(self, username: str, password: str, organization: Optional[str] = None, cookiejar: Optional[dict] = None) -> dict:
+    def login(self, username: str, password: str, organization: Optional[str] = None, saved_session: Optional[dict] = None) -> dict:
         ...
 
     def logoff(self):

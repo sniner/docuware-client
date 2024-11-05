@@ -8,10 +8,13 @@ functionality.
 Please keep in mind: **This software is not related to DocuWare.** It is a work
 in progress, may yield unexpected results, and almost certainly contains bugs.
 
-> [!NOTE] Version 0.4.x has only been partially tested and is subject to
-> extensive refactoring. If you require a better tested release, it is
-> recommended that you use 0.2.x or 0.3.x. However, I recommend that you try
-> the latest 0.4 release first.
+> [!NOTE] Starting with version 0.5.0, OAuth2 authentication is the new default.
+> Unless you explicitly request cookie authentication with
+> `dw.login(..., cookie_auth=True)`, OAuth2 will be used. OAuth2 authentication
+> has been available since DocuWare 7.10, and
+> [cookie authentication will be discontinued](https://start.docuware.com/blog/product-news/docuware-sdk-discontinuation-of-cookie-authentication)
+> with DocuWare 7.11.
+
 
 ## Usage
 
@@ -41,7 +44,7 @@ if session_file.exists():
 else:
     session = None
 dw = docuware.Client("http://localhost")
-session = dw.login("username", "password", "organization", cookiejar=session)
+session = dw.login("username", "password", "organization", saved_session=session)
 with open(session_file, "w") as f:
     json.dump(session, f)
 ```
@@ -269,4 +272,3 @@ this software as long as the copyright notice is preserved.
 
 [1]: https://docuware.com/
 [2]: https://developer.docuware.com/rest/index.html
-

@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import pathlib
 import sys
 from typing import Optional
@@ -28,11 +29,21 @@ def parse_arguments():
         action="store_true",
         help="Output more messages"
     )
+    parser.add_argument(
+        "--ignore-certificate",
+        action="store_true",
+        help="Do not verify certificate integrity"
+    )
 
     subparsers = parser.add_subparsers(dest="subcommand")
 
     login_parser = subparsers.add_parser(
         "login", description="Connect to DocuWare server"
+    )
+    login_parser.add_argument(
+        "--cookie-auth",
+        action="store_true",
+        help="Authenticate with session cookie instead of OAuth2"
     )
     login_parser.add_argument(
         "--url",
@@ -226,12 +237,13 @@ def main():
     session_file = args.config_dir / ".session"
 
     if args.subcommand == "login":
-        dw = docuware.Client(args.url)
+        dw = docuware.Client(args.url, verify_certificate=not args.ignore_certificate)
         try:
             session = dw.login(
                 username=args.username,
                 password=args.password,
-                organization=args.organization
+                organization=args.organization,
+                oauth2=not args.cookie_auth,
             )
         except docuware.AccountError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -248,6 +260,7 @@ def main():
                 json.dump(credentials, f, indent=4)
             with open(session_file, "w") as f:
                 json.dump(session, f)
+
             print(f"Login successful", file=sys.stderr)
             exit(0)
 
@@ -260,15 +273,15 @@ def main():
     with open(session_file) as f:
         session = json.load(f)
 
-    dw = docuware.Client(credentials.get("url", "http://localhost"))
+    dw = docuware.Client(credentials.get("url", "http://localhost"), verify_certificate=not args.ignore_certificate)
     try:
         session = dw.login(
             username=credentials.get("username"),
             password=credentials.get("password"),
             organization=credentials.get("organization"),
-            cookiejar=session,
+            saved_session=session,
         )
-    except docuware.AccountError as exc:
+    except (docuware.AccountError, docuware.ResourceError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         exit(1)
     else:
