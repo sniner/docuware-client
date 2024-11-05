@@ -35,6 +35,7 @@ class DocuwareClient(types.DocuwareClientP):
     ) -> dict:
         if oauth2 is None:
             oauth2 = "access_token" in saved_session if saved_session else True
+
         if oauth2:
             auth = conn.OAuth2Authenticator(
                 username=username,
@@ -51,8 +52,7 @@ class DocuwareClient(types.DocuwareClientP):
                 organization=organization,
                 saved_state=saved_session,
             )
-            if saved_session:
-                self.conn.authenticator = auth
+            self.conn.authenticator = auth if saved_session else None
             state = auth.login(self.conn)
             self.conn.authenticator = auth
 
@@ -62,8 +62,8 @@ class DocuwareClient(types.DocuwareClientP):
         self.version = res.get("Version")
         return state or {}
 
-    def logoff(self):
-        url = self.conn.make_url("/DocuWare/Platform/Account/Logoff")
-        self.conn._get(url)
+    def logoff(self) -> None:
+        if self.conn.authenticator:
+            self.conn.authenticator.logoff(self.conn)
 
 # vim: set et sw=4 ts=4:

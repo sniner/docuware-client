@@ -2,7 +2,8 @@ from __future__ import annotations
 import logging
 import requests
 import urllib.parse as urlparse
-from typing import Any, Dict, Optional, Protocol, Tuple
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional, Tuple
 
 from docuware import cijson, errors, parser, utils
 
@@ -22,19 +23,45 @@ DEFAULT_HEADERS = {
 
 JSON_HEADERS = {
     "Accept": "application/json",
-
 }
 
 TEXT_HEADERS = {
     "Accept": "text/plain",
 }
 
-class Authenticator(Protocol):
+class Authenticator(ABC):
+    @abstractmethod
     def authenticate(self, conn: Connection) -> requests.Session:
         ...
 
+    @abstractmethod
     def login(self, conn: Connection) -> dict:
         ...
+
+    @abstractmethod
+    def logoff(self, conn: Connection) -> None:
+        ...
+
+    def _get(self, conn: Connection, path: str) -> dict:
+        url = conn.make_url(path)
+        resp = conn.session.get(url, headers={**DEFAULT_HEADERS, **JSON_HEADERS})
+        if resp.status_code == 200:
+            return resp.json(object_hook=conn._json_object_hook)
+        raise errors.ResourceError("Failed to get resource", url=url, status_code=resp.status_code)
+
+    def _post(
+        self,
+        conn: Connection,
+        path: str,
+        headers: Optional[Dict[str, str]] = None,
+        data:Optional[Any] = None
+    ) -> dict:
+        url = conn.make_url(path)
+        headers = {**DEFAULT_HEADERS, **(headers or {}), **JSON_HEADERS}
+        resp = conn.session.post(url, headers=headers, data=data)
+        if resp.status_code == 200:
+            return resp.json(object_hook=conn._json_object_hook)
+        raise errors.ResourceError("Failed to post to resource", url=url, status_code=resp.status_code)
 
 class CookieAuthenticator(Authenticator):
     def __init__(
@@ -79,11 +106,15 @@ class CookieAuthenticator(Authenticator):
             data["Organization"] = self.organization
 
         try:
-            self.result = conn.post_json(endpoint, headers=headers, data=data)
+            self.result = self._post(conn, endpoint, headers=headers, data=data)
             self.cookies = requests.utils.dict_from_cookiejar(conn.session.cookies)
             return self.cookies
         except errors.ResourceError as exc:
             raise errors.AccountError(f"Log in failed with code {exc.status_code}")
+
+    def logoff(self, conn: Connection) -> None:
+        self._get(conn, "/DocuWare/Platform/Account/Logoff")
+
 
 class OAuth2Authenticator(Authenticator):
     def __init__(
@@ -104,22 +135,34 @@ class OAuth2Authenticator(Authenticator):
             conn.session.headers.update({
                "Authorization": f"Bearer {token}"
             })
+        else:
+            if "Authorization" in conn.session.headers:
+                del conn.session.headers["Authorization"]
 
     def _get_access_token(self, conn: Connection) -> Optional[str]:
-        endpoint = "/DocuWare/Identity/connect/token"
-        data = {
-            "grant_type": "password",
-            "username": self.username,
-            "password": self.password,
-            "client_id": "docuware.platform.net.client",
-            "scope": "docuware.platform"
-        }
+        log.debug("Requesting access token")
         try:
-            log.debug("Requesting access token")
-            self.result = conn.post_json(endpoint, data=data) or {}
+            # According to https://support.docuware.com/en-us/knowledgebase/article/KBA-37505:
+            # Step 1: Get responsible Identity Service
+            res = self._get(conn, "/DocuWare/Platform/Home/IdentityServiceInfo")
+
+            # Step 2: Get Identity Service Configuration
+            path = f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+            res = self._get(conn, path)
+
+            # Step 3: Obtain an Access Token
+            path = res.get("token_endpoint") or "/DocuWare/Identity/connect/token"
+            data = {
+                "grant_type": "password",
+                "username": self.username,
+                "password": self.password,
+                "client_id": "docuware.platform.net.client",
+                "scope": "docuware.platform"
+            }
+            self.result = self._post(conn, path, data=data)
             token = self.result.get("access_token")
             if not token:
-               raise errors.ResourceError(status_code=0)
+               raise errors.ResourceError(status_code=599)
             return token
         except errors.ResourceError as exc:
             log.warning("Failed to get access token (%s)", exc.status_code)
@@ -131,15 +174,18 @@ class OAuth2Authenticator(Authenticator):
         return conn.session
 
     def login(self, conn: Connection) -> dict:
-        if self.token:
-            self._apply_access_token(conn, self.token)
-        else:
-            if "Authorization" in conn.session.headers:
-                del conn.session.headers["Authorization"]
+        self._apply_access_token(conn, self.token)
         conn.session = self.authenticate(conn)
         return {
             "access_token": self.token,
         }
+
+    def logoff(self, conn: Connection) -> None:
+        if self.token:
+            # FIXME: How to revoke an access token?
+            #self._get(conn, "/DocuWare/Identity/connect/revocation")
+            self.token = None
+            self._apply_access_token(conn, None)
 
 
 class Connection:
