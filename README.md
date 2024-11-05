@@ -8,7 +8,7 @@ functionality.
 Please keep in mind: **This software is not related to DocuWare.** It is a work
 in progress, may yield unexpected results, and almost certainly contains bugs.
 
-> [!NOTE] Starting with version 0.5.0, OAuth2 authentication is the new default.
+> ⚠️ Starting with version 0.5.0, OAuth2 authentication is the new default.
 > Unless you explicitly request cookie authentication with
 > `dw.login(..., cookie_auth=True)`, OAuth2 will be used. OAuth2 authentication
 > has been available since DocuWare 7.10, and
