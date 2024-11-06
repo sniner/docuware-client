@@ -81,3 +81,9 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(sc, ("keyword", ["test 1", "test 2"]))
         sc = parser.parse_search_condition('keyword = "test\\" 1" , " test 2 "')
         self.assertEqual(sc, ("keyword", ["test\" 1", " test 2 "]))
+
+    def test_condition_parser_edgecases(self):
+        sc = parser.parse_search_condition("keyword")
+        self.assertEqual(sc, ("keyword", []))
+        sc = parser.parse_search_condition("keyword=")
+        self.assertEqual(sc, ("keyword", []))

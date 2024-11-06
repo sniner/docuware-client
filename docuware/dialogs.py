@@ -69,7 +69,7 @@ class TaskListDialog(Dialog):
 class SearchDialog(Dialog):
     def __init__(self, config: dict, file_cabinet: types.FileCabinetP):
         super().__init__(config, file_cabinet)
-        self._fields = None
+        self._fields: Optional[Dict[str, SearchField]] = None
 
     def _load(self):
         if self._fields is None:
@@ -82,9 +82,9 @@ class SearchDialog(Dialog):
             self._query = SearchQuery(config.get("Query", {}), self)
 
     @property
-    def fields(self):
+    def fields(self) -> Dict[str, SearchField]:
         self._load()
-        return self._fields
+        return self._fields or {}
 
     def search(self, conditions: dict[str, str], operation: Optional[str] = None):
         self._load()
@@ -92,12 +92,12 @@ class SearchDialog(Dialog):
 
 
 class SearchField:
-    def __init__(self, config: dict, dialog: Dialog):
+    def __init__(self, config: Dict, dialog: Dialog):
         self.dialog = dialog
-        self.id = config.get("DBFieldName")
-        self.name = config.get("DlgLabel", self.id)
-        self.length = config.get("Length", -1)
-        self.type = config.get("DWFieldType")
+        self.id: str = config.get("DBFieldName", "")
+        self.name: str = config.get("DlgLabel", self.id)
+        self.length: int = config.get("Length", -1)
+        self.type: Optional[str] = config.get("DWFieldType")
         self.endpoints = structs.Endpoints(config)
 
     def values(self):
@@ -118,8 +118,8 @@ Conditions = Union[str, List[str], Tuple[str], Dict[str, Union[str, List[str]]]]
 
 class ConditionParser:
     def __init__(self, dialog: SearchDialog):
-        self.fields_by_name = {}
-        self.fields_by_id = {}
+        self.fields_by_name: Dict[str, SearchField] = {}
+        self.fields_by_id: Dict[str, SearchField] = {}
         for field in dialog.fields.values():
             self.fields_by_name[field.name.casefold()] = field
             self.fields_by_id[field.id.casefold()] = field
@@ -147,7 +147,7 @@ class ConditionParser:
     def _term(self, name: str, value: Union[str, List[str]]) -> Tuple[str, List[str]]:
         field = self.field_by_name(name)
         if isinstance(value, str):
-            value = [str]
+            value = [value]
         else:
             try:
                 value = [self.convert_field_value(i) for i in value]
@@ -155,13 +155,13 @@ class ConditionParser:
                 value = [str(value)]
         return field.id, value
 
-    def parse_list(self, conditions: Union[List[str], Tuple[str]]):
+    def parse_list(self, conditions: Union[List[str], Tuple[str]]) -> List[Tuple[str, List[str]]]:
         return [self._term(*parser.parse_search_condition(c)) for c in conditions]
 
-    def parse_dict(self, conditions: Dict[str, List[str]]):
-        terms = [self._term(k, v) for k, v in conditions.items()]
+    def parse_dict(self, conditions: Dict[str, Union[str, List[str]]]) -> List[Tuple[str, List[str]]]:
+        return [self._term(k, v) for k, v in conditions.items()]
 
-    def parse(self, conditions: Conditions):
+    def parse(self, conditions: Conditions) -> List[Tuple[str, List[str]]]:
         if isinstance(conditions, str):
             return self.parse_list([conditions])
         elif isinstance(conditions, (list, tuple)):
