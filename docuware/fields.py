@@ -1,34 +1,36 @@
 from __future__ import annotations
 import logging
-from typing import Any, Iterator, Union, List, Tuple, Dict
+from typing import Any, Dict, Type
 
-from docuware import cidict, errors, utils
+from docuware import cidict, errors, types, utils
 
 log = logging.getLogger(__name__)
 
+FieldValueConfigT = Dict[str, Any]
 
-class FieldValue:
-    TYPE_TABLE = {}
+class FieldValue(types.FieldValueP):
+    TYPE_TABLE: cidict.CaseInsensitiveDict[Type[FieldValue]] = cidict.CaseInsensitiveDict()
 
-    def __init__(self, config: dict):
-        self.name = config.get("FieldLabel")
-        self.id = config.get("FieldName")
+    def __init__(self, config: FieldValueConfigT):
+        self.name = config.get("FieldLabel", "")
+        self.id = config.get("FieldName", "")
         self.content_type = config.get("ItemElementName")
         self.read_only = config.get("ReadOnly", True)
         self.internal = config.get("SystemField", False)
         self.value = config.get("Item")
 
     @staticmethod
-    def from_config(config: dict):
+    def from_config(config: FieldValueConfigT) -> FieldValue:
         content_type = config.get("ItemElementName")
-        return FieldValue.TYPE_TABLE.get(content_type, FieldValue)(config)
+        cls = FieldValue.TYPE_TABLE.get(content_type or "?")
+        return cls(config) if cls else FieldValue(config)
 
     def __str__(self):
         return f"Value '{self.name}' [{self.id}, {self.content_type}] = '{self.value}'"
 
 
 class StringFieldValue(FieldValue):
-    def __init__(self, config: dict):
+    def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
         self.value = str(self.value) if self.value else None
 
@@ -37,7 +39,7 @@ class StringFieldValue(FieldValue):
 
 
 class KeywordsFieldValue(FieldValue):
-    def __init__(self, config: dict):
+    def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
         values = config.get("Item", {}).get("Keyword", [])
         self.value = values if values else None
@@ -47,7 +49,7 @@ class KeywordsFieldValue(FieldValue):
 
 
 class IntFieldValue(FieldValue):
-    def __init__(self, config: dict):
+    def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
         try:
             self.value = None if self.value is None else int(self.value)
@@ -60,7 +62,7 @@ class IntFieldValue(FieldValue):
 
 
 class DecimalFieldValue(FieldValue):
-    def __init__(self, config: dict):
+    def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
         try:
             self.value = None if self.value is None else float(self.value)
@@ -73,18 +75,19 @@ class DecimalFieldValue(FieldValue):
 
 class DateTimeFieldValue(FieldValue):
 
-    def __init__(self, config: dict):
+    def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
-        if self.content_type == "Date":
-            self.value = utils.date_from_string(self.value)
-        else:
-            self.value = utils.datetime_from_string(self.value)
+        if self.value:
+            if self.content_type == "Date":
+                self.value = utils.date_from_string(str(self.value))
+            else:
+                self.value = utils.datetime_from_string(str(self.value))
 
     def __str__(self):
         return f"{self.content_type} '{self.name}' [{self.id}] = {self.value}"
 
 
-FieldValue.TYPE_TABLE = cidict.CaseInsensitiveDict({
+FieldValue.TYPE_TABLE = cidict.CaseInsensitiveDict[Type[FieldValue]]({
     "Date": DateTimeFieldValue,
     "DateTime": DateTimeFieldValue,
     "Int": IntFieldValue,

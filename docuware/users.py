@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from typing import Dict, Generator, Optional, Union
+from typing import Any, Dict, Generator, Iterator, Optional, Union
 
 import re
 import requests
@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 
-class User:
+class User(types.UserP):
     def __init__(
             self,
             name: Optional[str] = None,
@@ -22,16 +22,18 @@ class User:
             email: Optional[str] = None,
             db_name: Optional[str] = None,
         ):
-        self.first_name = first_name
-        self.last_name = last_name
-        self.name = name
-        self.salutation = salutation
-        self.email = email
-        self.db_name = db_name
-        self.organization = None
-        self.id = None
-        self._active = None
-        self.endpoints = None
+        self.salutation: Optional[str] = salutation
+        self.email: Optional[str] = email
+        self.db_name: Optional[str] = db_name
+        self.organization: Optional[types.OrganizationP] = None
+        self.id: Optional[str] = None
+        self.endpoints: Optional[types.EndpointsP] = None
+        self._first_name:  Optional[str] = first_name
+        self._last_name: Optional[str] = last_name
+        self._full_name: Optional[str] = None
+        self._active: Optional[bool] = None
+        if name:
+            self.name = name
 
     @property
     def name(self) -> str:
@@ -41,7 +43,7 @@ class User:
             return " ".join([n for n in [self._first_name, self._last_name] if n])
 
     @name.setter
-    def name(self, name: str):
+    def name(self, name: str) -> None:
         if name:
             self._full_name = name
             parts = name.split(", ", 1)
@@ -60,7 +62,7 @@ class User:
             self._full_name = None
 
     @property
-    def first_name(self) -> str:
+    def first_name(self) -> Optional[str]:
         return self._first_name
 
     @first_name.setter
@@ -69,7 +71,7 @@ class User:
         self._full_name = None
 
     @property
-    def last_name(self) -> str:
+    def last_name(self) -> Optional[str]:
         return self._last_name
 
     @last_name.setter
@@ -79,8 +81,11 @@ class User:
 
     @property
     def groups(self) -> Generator[Group, None, None]:
-        result = self.organization.client.conn.get_json(self.endpoints["groups"])
-        return (Group.from_response(g, self.organization) for g in result.get("Item", []))
+        if self.organization and self.endpoints:
+            result = self.organization.client.conn.get_json(self.endpoints["groups"])
+            return (Group.from_response(g, self.organization) for g in result.get("Item", []))
+        else:
+            return (Group("") for _ in [])
 
     def make_db_name(self) -> str:
         n = "".join([n for n in [self._last_name, self._first_name] if n]) or self.name
@@ -103,7 +108,7 @@ class User:
         u.organization = organization
         return u
 
-    def as_dict(self, overrides: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    def as_dict(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
         d = {
             item[0]: item[1] for item in [
                 ("Name", self.name),
@@ -126,9 +131,9 @@ class User:
         return True if self._active else False
 
     @active.setter
-    def active(self, state: bool):
+    def active(self, state: bool) -> None:
         if self.active != state:
-            if not self.id:
+            if not self.id or not self.organization:
                 raise errors.UserOrGroupError(f"Not a registered user: {self}")
             body = self.as_dict(overrides={"Active": state})
             try:
@@ -138,10 +143,10 @@ class User:
             else:
                 self._active = state
 
-    def add_to_group(self, group: Group) -> bool:
+    def add_to_group(self, group: types.GroupP) -> bool:
         return group.add_user(self)
 
-    def remove_from_group(self, group: Group) -> bool:
+    def remove_from_group(self, group: types.GroupP) -> bool:
         return group.remove_user(self)
 
     def __str__(self) -> str:
@@ -151,31 +156,31 @@ class User:
         return f"{self.__class__.__name__}(name='{self.name}', id='{self.id}')"
 
 
-class Users:
+class Users(types.UsersP):
     def __init__(self, organization: types.OrganizationP):
         self.organization = organization
 
-    def __iter__(self) -> Generator[User, None, None]:
+    def __iter__(self) -> Generator[types.UserP, None, None]:
         result = self.organization.conn.get_json(self.organization.endpoints["users"])
         return (User.from_response(user, self.organization) for user in result.get("User", []))
 
-    def __getitem__(self, key: str) -> User:
+    def __getitem__(self, key: str) -> types.UserP:
         return structs.first_item_by_id_or_name(self, key)
 
-    def get(self, key: str, default: Optional[User] = None) -> Optional[User]:
+    def get(self, key: str, default: Optional[types.UserP] = None) -> Optional[types.UserP]:
         try:
             return self.__getitem__(key)
         except KeyError:
             return default
 
-    def add(self, user: User, password: Optional[str] = None) -> Optional[User]:
+    def add(self, user: types.UserP, password: Optional[str] = None) -> Optional[types.UserP]:
         headers = {
             "Content-Type": "application/vnd.docuware.platform.createorganizationuser+json"
         }
         try:
             body = user.as_dict()
             if "DBName" not in body:
-                body["DBName"] = body.make_db_name()
+                body["DBName"] = user.make_db_name()
             body["Password"] = password or utils.random_password()
             result = self.organization.conn.post_json(
                 self.organization.endpoints["userInfo"],
@@ -265,7 +270,7 @@ class Groups:
     def __init__(self, organization: types.OrganizationP):
         self.organization = organization
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[types.GroupP, None, None]:
         result = self.organization.client.conn.get_json(self.organization.endpoints["groups"])
         return (Group.from_response(group, self.organization) for group in result.get("Item", []))
 

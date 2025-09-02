@@ -1,31 +1,35 @@
 from __future__ import annotations
 import re
-from typing import Iterable, List, Optional, Type, TypeVar, Union
+from typing import (
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 
 from docuware import cidict, errors, types
 
-T = TypeVar("T")
+
+# ConfigItemT = List[Dict[str, str]]
+# ConfigT = Union[Dict[str, ConfigItemT], cidict.CaseInsensitiveDict[ConfigItemT]]
 
 
-class Endpoints(cidict.CaseInsensitiveDict):
-    def __init__(self, config: Union[dict, cidict.CaseInsensitiveDict]):
+class Endpoints(cidict.CaseInsensitiveDict[str]):
+    def __init__(self, config: types.ConfigT):
         super().__init__()
-        for link in config.get("Links", []):
+        for link in config.get("Links") or []:
             self[link["rel"]] = link["href"]
 
 
-class Resources(cidict.CaseInsensitiveDict):
-    def __init__(self, config: Union[dict, cidict.CaseInsensitiveDict]):
-        super().__init__()
-        for rc in config.get("Resources", []):
-            r = ResourcePattern(rc)
-            self[r.name] = r
-
-
 class ResourcePattern:
-    def __init__(self, config: Union[dict, cidict.CaseInsensitiveDict]):
-        self.name = config.get("Name")
-        self.pattern = config.get("UriPattern")
+    def __init__(self, config: Union[Dict[str, str], cidict.CaseInsensitiveDict[str]]):
+        self.name = config.get("Name") or "UndefinedResourcePattern"
+        self.pattern = config.get("UriPattern") or ""
         self._fields = None
 
     @property
@@ -34,7 +38,7 @@ class ResourcePattern:
             self._fields = re.findall(r"\{(\w+)\}", self.pattern)
         return self._fields
 
-    def apply(self, data: Union[dict, cidict.CaseInsensitiveDict], strict: bool = False) -> str:
+    def apply(self, data: Union[Dict[str, str], cidict.CaseInsensitiveDict[str]], strict: bool = False) -> str:
         s = self.pattern
         for name, value in data.items():
             s, n = re.subn("\\{" + name + "\\}", value, s, flags=re.IGNORECASE)
@@ -55,22 +59,78 @@ class ResourcePattern:
         return f"Resource {self.name} = '{self.pattern}'"
 
 
-def first_item_by_id_or_name(items: Iterable[T], key: str, default: Union[T, None, types.Nothing] = types.NOTHING) -> Optional[T]:
+class Resources(cidict.CaseInsensitiveDict[ResourcePattern]):
+    def __init__(self, config: Union[dict, cidict.CaseInsensitiveDict]):
+        super().__init__()
+        for rc in config.get("Resources") or []:
+            r = ResourcePattern(rc)
+            self[r.name] = r
+
+
+@overload
+def first_item_by_id_or_name(
+    items: Iterable[types.IdNameT],
+    key: str,
+    *,
+    default: types.IdNameT,
+    required: bool = False,
+) -> types.IdNameT: ...
+
+@overload
+def first_item_by_id_or_name(
+    items: Iterable[types.IdNameT],
+    key: str,
+    *,
+    default: None = None,
+    required: bool = True,
+) -> types.IdNameT: ...
+
+def first_item_by_id_or_name(
+    items: Iterable[types.IdNameT],
+    key: str,
+    *,
+    default: Optional[types.IdNameT] = None,
+    required: bool = False,
+) -> Optional[types.IdNameT]:
     name = key.casefold()
     for item in items:
         if item.id == key or item.name.casefold() == name:
             return item
-    if default is types.NOTHING:
+    if required:
         raise KeyError(key)
     else:
         return default
 
 
-def first_item_by_class(items: Iterable[T], cls: Type, default: Union[T, None, types.Nothing] = types.NOTHING) -> Optional[T]:
+@overload
+def first_item_by_class(
+    items: Iterable[types.IdNameT],
+    cls: Type,
+    *,
+    default: types.IdNameT,
+    required: bool = False,
+) -> types.IdNameT: ...
+
+@overload
+def first_item_by_class(
+    items: Iterable[types.IdNameT],
+    cls: Type,
+    *,
+    default: None = None,
+    required: bool = True,
+) -> types.IdNameT: ...
+
+def first_item_by_class(
+    items: Iterable[types.IdNameT],
+    cls: Type,
+    *,
+    default: Optional[types.IdNameT] = None,
+    required: bool = False,
+) -> Optional[types.IdNameT]:
     for item in items:
         if isinstance(item, cls):
             return item
-    if default is types.NOTHING:
+    if required:
         raise KeyError(cls.__name__)
     else:
         return default

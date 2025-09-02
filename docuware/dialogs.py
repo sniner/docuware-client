@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, date
-from typing import Any, Iterator, Union, List, Optional, Tuple, Dict
+from typing import Any, Iterator, Mapping, Union, List, Optional, Tuple, Dict
 
 from docuware import conn, errors, parser, structs, types, utils, document, fields
 
@@ -16,9 +16,9 @@ class Dialog(types.DialogP):
     def __init__(self, config: dict, file_cabinet: types.FileCabinetP):
         self.file_cabinet = file_cabinet
         self.client = file_cabinet.organization.client
-        self.name = config.get("DisplayName")
+        self.name = config.get("DisplayName", "")
         self.type = config.get("Type")
-        self.id = config.get("Id")
+        self.id = config.get("Id", "")
         self.endpoints = structs.Endpoints(config)
 
     @staticmethod
@@ -33,6 +33,10 @@ class Dialog(types.DialogP):
         elif dlg_type == "TaskList":
             return TaskListDialog(config, file_cabinet)
         return Dialog(config, file_cabinet)
+
+    @property
+    def fields(self) -> Dict[str, types.SearchFieldP]:
+        return {}
 
     def __str__(self):
         return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
@@ -49,27 +53,26 @@ class ResultListDialog(Dialog):
 class TaskListDialog(Dialog):
     def __init__(self, config: dict, file_cabinet: types.FileCabinetP):
         super().__init__(config, file_cabinet)
-        self._fields = None
+        self._fields: Optional[Dict[str, types.SearchFieldP]] = None
 
     def _load(self):
         if self._fields is None:
             config = self.client.conn.get_json(self.endpoints["self"])
-            # cijson.print_json(data)
             self._fields = {
                 f.id: f for f in
                 [SearchField(fld, self) for fld in config.get("Fields", [])]
             }
 
     @property
-    def fields(self):
+    def fields(self) -> Dict[str, types.SearchFieldP]:
         self._load()
-        return self._fields
+        return self._fields or {}
 
 
 class SearchDialog(Dialog):
     def __init__(self, config: dict, file_cabinet: types.FileCabinetP):
         super().__init__(config, file_cabinet)
-        self._fields: Optional[Dict[str, SearchField]] = None
+        self._fields: Optional[Dict[str, types.SearchFieldP]] = None
 
     def _load(self):
         if self._fields is None:
@@ -82,16 +85,16 @@ class SearchDialog(Dialog):
             self._query = SearchQuery(config.get("Query", {}), self)
 
     @property
-    def fields(self) -> Dict[str, SearchField]:
+    def fields(self) -> Dict[str, types.SearchFieldP]:
         self._load()
         return self._fields or {}
 
-    def search(self, conditions: dict[str, str], operation: Optional[str] = None):
+    def search(self, conditions: types.SearchConditionsT, operation: Optional[str] = None):
         self._load()
         return self._query.search(conditions=conditions, operation=operation)
 
 
-class SearchField:
+class SearchField(types.SearchFieldP):
     def __init__(self, config: Dict, dialog: Dialog):
         self.dialog = dialog
         self.id: str = config.get("DBFieldName", "")
@@ -113,13 +116,10 @@ class SearchField:
             return f"Field '{self.name}' [{self.id}, {self.type}]"
 
 
-Conditions = Union[str, List[str], Tuple[str], Dict[str, Union[str, List[str]]]]
-
-
 class ConditionParser:
     def __init__(self, dialog: SearchDialog):
-        self.fields_by_name: Dict[str, SearchField] = {}
-        self.fields_by_id: Dict[str, SearchField] = {}
+        self.fields_by_name: Dict[str, types.SearchFieldP] = {}
+        self.fields_by_id: Dict[str, types.SearchFieldP] = {}
         for field in dialog.fields.values():
             self.fields_by_name[field.name.casefold()] = field
             self.fields_by_id[field.id.casefold()] = field
@@ -134,7 +134,7 @@ class ConditionParser:
             value = utils.datetime_to_string(value)
         return str(value)
 
-    def field_by_name(self, name: str) -> SearchField:
+    def field_by_name(self, name: str) -> types.SearchFieldP:
         iname = name.casefold()
         if iname in self.fields_by_id:
             field = self.fields_by_id[iname]
@@ -161,7 +161,7 @@ class ConditionParser:
     def parse_dict(self, conditions: Dict[str, Union[str, List[str]]]) -> List[Tuple[str, List[str]]]:
         return [self._term(k, v) for k, v in conditions.items()]
 
-    def parse(self, conditions: Conditions) -> List[Tuple[str, List[str]]]:
+    def parse(self, conditions: types.SearchConditionsT) -> List[Tuple[str, List[str]]]:
         if isinstance(conditions, str):
             return self.parse_list([conditions])
         elif isinstance(conditions, (list, tuple)):
@@ -194,10 +194,16 @@ class SearchQuery:
                 raise errors.InternalError("Endpoint 'dialogExpression' missing")
 
     @property
-    def conn(self) -> conn.Connection:
+    def conn(self) -> types.ConnectionP:
         return self.dialog.client.conn
 
-    def search(self, conditions: Conditions, operation: str = None, sort_field: str = None, sort_order: str = None) -> SearchResult:
+    def search(
+        self,
+        conditions: types.SearchConditionsT,
+        operation: Optional[str] = None,
+        sort_field: Optional[str] = None,
+        sort_order: Optional[str] = None
+    ) -> SearchResult:
         terms = self.cond_parser.parse(conditions)
         query = {"fields": ",".join([t[0] for t in terms])}
         if sort_field:
@@ -258,7 +264,7 @@ class SearchResultItem:
         return dw.conn.get_bytes(self.endpoints["thumbnail"])
 
     @property
-    def document(self):
+    def document(self) -> document.Document:
         if self._document is None:
             dw = self.result.query.dialog.client
             config = dw.conn.get_json(self.endpoints["self"])

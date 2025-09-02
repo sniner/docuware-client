@@ -24,7 +24,7 @@ class Document:
     def client(self) -> types.DocuwareClientP:
         return self.file_cabinet.organization.client
 
-    def field(self, key: str, default: Union[Any, None, types.Nothing] = types.NOTHING):
+    def field(self, key: str, default: Optional[Any] = None):
         return structs.first_item_by_id_or_name(self.fields, key, default=default)
 
     @staticmethod

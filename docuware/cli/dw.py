@@ -219,10 +219,10 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     for org in dw.organizations:
         print(org)
         print(indent(1), "Company names:")
-        for cn in org.info.get("CompanyNames", []):
+        for cn in org.info.get("CompanyNames") or []:
             print(indent(2), cn)
         print(indent(1), "Company address:")
-        for al in org.info.get("AddressLines", []):
+        for al in org.info.get("AddressLines") or []:
             print(indent(2), al)
         print(indent(1), "Administrator:", org.info.get("Administrator"))
         print(indent(1), "Email:", org.info.get("EMail"))

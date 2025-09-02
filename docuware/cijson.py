@@ -5,11 +5,11 @@ from docuware import cidict
 
 
 class CIJSONEncoder(json.JSONEncoder):
-    def default(self, obj: object):
-        if isinstance(obj, cidict.CaseInsensitiveDict):
-            return dict(obj.items())
+    def default(self, o: object):
+        if isinstance(o, cidict.CaseInsensitiveDict):
+            return dict(o.items())
         else:
-            return super().default(obj)
+            return super().default(o)
 
 
 def case_insensitive_hook(obj: object) -> object:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 import collections
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from docuware import cidict
 
@@ -17,7 +17,7 @@ class CharReader:
         else:
             return next(self._itext, None)
 
-    def ungetch(self, char: str):
+    def ungetch(self, char: Optional[str]):
         if char is not None:
             self._unget_buffer.append(char)
 
@@ -30,7 +30,7 @@ class CharReader:
         return f"CharReader({repr(self.text)})"
 
 
-def parse_content_disposition(text: str, case_insensitive: bool = True) -> Union[dict, cidict.CaseInsensitiveDict]:
+def parse_content_disposition(text: str, case_insensitive: bool = True) -> Union[Dict[str, str], cidict.CaseInsensitiveDict]:
     """
     Parser for HTTP Content-Disposition header values. For example 'attachment; filename="filename.jpg"' will
     return { type: "attachment", filename: "filename.jpg" }.
@@ -82,7 +82,7 @@ def parse_content_disposition(text: str, case_insensitive: bool = True) -> Union
             else:
                 raise ValueError
         elif state == 11:  # key of key/value pair
-            if ch == "=":
+            if ch is None or ch == "=":
                 key = key.rstrip()
                 state = 20
             elif ch.isalnum():

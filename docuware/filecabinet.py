@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from typing import List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union, overload
 
 from docuware import structs, types, dialogs
 
@@ -8,12 +8,12 @@ log = logging.getLogger(__name__)
 
 
 class FileCabinet(types.FileCabinetP):
-    def __init__(self, config: dict, organization: types.OrganizationP):
+    def __init__(self, config: Dict, organization: types.OrganizationP):
         self.organization = organization
-        self.name = config.get("Name")
-        self.id = config.get("Id")
+        self.name = config.get("Name", "")
+        self.id = config.get("Id", "")
         self.endpoints = structs.Endpoints(config)
-        self._dialogs = None
+        self._dialogs: Optional[List[types.DialogP]] = None
 
     @property
     def dialogs(self) -> List[types.DialogP]:
@@ -24,28 +24,45 @@ class FileCabinet(types.FileCabinetP):
                 if dlg.get("$type") == "DialogInfo" and ("_" not in dlg.get("Id"))
                 # and (dlg.get("IsDefault") or dlg.get("IsForMobile"))
             ]
-        return self._dialogs
+        return self._dialogs or []
 
-    def dialog(self, key: str, default: Union[types.DialogP, None, types.Nothing] = types.NOTHING) -> Optional[types.DialogP]:
-        return structs.first_item_by_id_or_name(self.dialogs, key, default=default)
+    @overload
+    def dialog(self, key: str, *, required: Literal[True]) -> types.DialogP: ...
 
-    def search_dialog(self, key: Optional[str] = None, default: Union[types.DialogP, None, types.Nothing] = types.NOTHING):
+    @overload
+    def dialog(self, key: str, *, required: Literal[False]) -> Optional[types.DialogP]: ...
+
+    def dialog(self, key: str, *, required: bool = False) -> Optional[types.DialogP]:
+        return structs.first_item_by_id_or_name(self.dialogs, key, required=required)
+
+    @overload
+    def search_dialog(self, key: Optional[str], *, required: Literal[True]) -> types.SearchDialogP: ...
+
+    @overload
+    def search_dialog(self, key: Optional[str], *, required: Literal[False]) -> Optional[types.SearchDialogP]: ...
+
+    def search_dialog(self, key: Optional[str] = None, *, required: bool = False) -> Optional[types.SearchDialogP]:
         # TODO: Is there a default search dialog?
+        search_dlgs = (dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog))
         if key:
             return structs.first_item_by_id_or_name(
-                (dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog)),
+                search_dlgs,
                 key,
-                default=default
+                required=required,
             )
         else:
-            return structs.first_item_by_class(self.dialogs, dialogs.SearchDialog, default=default)
+            return structs.first_item_by_class(
+                search_dlgs,
+                dialogs.SearchDialog,
+                required=required
+            )
 
     # This method from PR#4 needs a complete rewrite
     def create_data_entry(self, data: dict):
         """
         The function `create_data_entry` creates a data entry in a document management system using XML
         payload.
-        
+
         :param data: The `data` parameter is a dictionary that contains the field names and their
         corresponding values for creating a data entry. Each key-value pair in the dictionary represents
         a field name and its value
@@ -87,7 +104,7 @@ class FileCabinet(types.FileCabinetP):
         """
         The `update_data_entry` function updates the fields of a document in a file cabinet based on a
         search query and a dictionary of field-value pairs.
-        
+
         :param query: The `query` parameter is a list that represents the search query used to find the
         document to be updated. It is optional and can be left empty if you want to update all documents
         in the file cabinet

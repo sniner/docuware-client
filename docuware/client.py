@@ -21,9 +21,9 @@ class DocuwareClient(types.DocuwareClientP):
         result = self.conn.get_json(self.endpoints["organizations"])
         return (organization.Organization(org, self) for org in result.get("Organization", []))
 
-    def organization(self, key: str, default: Union[types.OrganizationP, None, types.Nothing] = types.NOTHING) -> Optional[types.OrganizationP]:
+    def organization(self, key: str, *, required: bool = False) -> Optional[types.OrganizationP]:
         """Access organization by id or name."""
-        return structs.first_item_by_id_or_name(self.organizations, key, default=default)
+        return structs.first_item_by_id_or_name(self.organizations, key, required=required)
 
     def login(
         self,

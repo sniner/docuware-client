@@ -5,7 +5,9 @@ import urllib.parse as urlparse
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple
 
-from docuware import cijson, errors, parser, utils
+from requests.models import Response
+
+from docuware import cijson, errors, parser, types, utils
 
 from urllib3.exceptions import InsecureRequestWarning
 from urllib3 import disable_warnings
@@ -29,20 +31,20 @@ TEXT_HEADERS = {
     "Accept": "text/plain",
 }
 
-class Authenticator(ABC):
+class Authenticator(ABC, types.AuthenticatorP):
     @abstractmethod
-    def authenticate(self, conn: Connection) -> requests.Session:
+    def authenticate(self, conn: types.ConnectionP) -> requests.Session:
         ...
 
     @abstractmethod
-    def login(self, conn: Connection) -> dict:
+    def login(self, conn: types.ConnectionP) -> dict:
         ...
 
     @abstractmethod
-    def logoff(self, conn: Connection) -> None:
+    def logoff(self, conn: types.ConnectionP) -> None:
         ...
 
-    def _get(self, conn: Connection, path: str) -> dict:
+    def _get(self, conn: types.ConnectionP, path: str) -> dict:
         url = conn.make_url(path)
         resp = conn.session.get(url, headers={**DEFAULT_HEADERS, **JSON_HEADERS})
         if resp.status_code == 200:
@@ -51,7 +53,7 @@ class Authenticator(ABC):
 
     def _post(
         self,
-        conn: Connection,
+        conn: types.ConnectionP,
         path: str,
         headers: Optional[Dict[str, str]] = None,
         data:Optional[Any] = None
@@ -78,7 +80,7 @@ class CookieAuthenticator(Authenticator):
         self.result: Optional[dict] = None
         self._warn = True
 
-    def authenticate(self, conn: Connection) -> requests.Session:
+    def authenticate(self, conn: types.ConnectionP) -> requests.Session:
         if self.cookies:
             log.debug("Authenticating with cookies")
             conn.session.cookies.update(self.cookies)
@@ -88,7 +90,7 @@ class CookieAuthenticator(Authenticator):
                 self._warn = False
         return conn.session
 
-    def login(self, conn: Connection) -> dict:
+    def login(self, conn: types.ConnectionP) -> dict:
         endpoint = "/DocuWare/Platform/Account/Logon"
 
         headers = {
@@ -112,7 +114,7 @@ class CookieAuthenticator(Authenticator):
         except errors.ResourceError as exc:
             raise errors.AccountError(f"Log in failed with code {exc.status_code}")
 
-    def logoff(self, conn: Connection) -> None:
+    def logoff(self, conn: types.ConnectionP) -> None:
         self._get(conn, "/DocuWare/Platform/Account/Logoff")
 
 
@@ -130,7 +132,7 @@ class OAuth2Authenticator(Authenticator):
         self.token = (saved_state or {}).get("access_token")
         self.result: dict = {}
 
-    def _apply_access_token(self, conn: Connection, token: Optional[str]) -> None:
+    def _apply_access_token(self, conn: types.ConnectionP, token: Optional[str]) -> None:
         if token:
             conn.session.headers.update({
                "Authorization": f"Bearer {token}"
@@ -139,7 +141,7 @@ class OAuth2Authenticator(Authenticator):
             if "Authorization" in conn.session.headers:
                 del conn.session.headers["Authorization"]
 
-    def _get_access_token(self, conn: Connection) -> Optional[str]:
+    def _get_access_token(self, conn: types.ConnectionP) -> Optional[str]:
         log.debug("Requesting access token")
         try:
             # According to https://support.docuware.com/en-us/knowledgebase/article/KBA-37505:
@@ -168,19 +170,19 @@ class OAuth2Authenticator(Authenticator):
             log.warning("Failed to get access token (%s)", exc.status_code)
         return None
 
-    def authenticate(self, conn: Connection) -> requests.Session:
+    def authenticate(self, conn: types.ConnectionP) -> requests.Session:
         self.token = self._get_access_token(conn)
         self._apply_access_token(conn, self.token)
         return conn.session
 
-    def login(self, conn: Connection) -> dict:
+    def login(self, conn: types.ConnectionP) -> dict:
         self._apply_access_token(conn, self.token)
         conn.session = self.authenticate(conn)
         return {
             "access_token": self.token,
         }
 
-    def logoff(self, conn: Connection) -> None:
+    def logoff(self, conn: types.ConnectionP) -> None:
         if self.token:
             # FIXME: How to revoke an access token?
             #self._get(conn, "/DocuWare/Identity/connect/revocation")
@@ -188,13 +190,13 @@ class OAuth2Authenticator(Authenticator):
             self._apply_access_token(conn, None)
 
 
-class Connection:
+class Connection(types.ConnectionP):
     def __init__(
         self,
         base_url: str,
         case_insensitive: bool = True,
         verify_certificate: bool = True,
-        authenticator: Optional[Authenticator] = None,
+        authenticator: Optional[types.AuthenticatorP] = None,
     ):
         self.base_url = base_url
         self.session = requests.Session()
@@ -202,19 +204,25 @@ class Connection:
         self.authenticator = authenticator
         self._json_object_hook = cijson.case_insensitive_hook if case_insensitive else None
 
-    def make_path(self, path: str, query: dict) -> str:
+    def make_path(self, path: str, query: Dict[str, str]) -> str:
         u = urlparse.urlsplit(path)
         q = "&".join(
             ([u.query] if u.query else []) +
             [f"{urlparse.quote_plus(k)}={urlparse.quote_plus(v)}" for k, v in query.items()])
         return urlparse.urlunsplit(u._replace(query=q))
 
-    def make_url(self, path: str, query: Optional[dict] = None) -> str:
+    def make_url(self, path: str, query: Optional[Dict[str, str]] = None) -> str:
         if query:
             path = self.make_path(path, query)
         return urlparse.urljoin(self.base_url, path)
 
-    def _post(self, url: str, headers: Optional[Dict[str, str]] = None, json: Optional[dict] = None, data: Optional[Any] = None):
+    def _post(
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        json: Optional[dict] = None,
+        data: Optional[Any] = None
+    ) -> Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
         resp = self.session.post(url, headers=headers, json=json, data=data)
         if resp.status_code in (401, 403) and self.authenticator:
@@ -222,7 +230,13 @@ class Connection:
             resp = self.session.post(url, headers=headers, json=json, data=data)
         return resp
 
-    def post(self, path: str, headers: Optional[Dict[str, str]] = None, json: Optional[dict] = None, data: Optional[Any] = None):
+    def post(
+        self,
+        path: str,
+        headers: Optional[Dict[str, str]] = None,
+        json: Optional[dict] = None,
+        data: Optional[Any] = None
+    ) -> Response:
         url = self.make_url(path)
         resp = self._post(url, headers=headers, json=json, data=data)
         if resp.status_code == 200:
@@ -234,7 +248,7 @@ class Connection:
                 status_code=resp.status_code
             )
 
-    def post_json(self, path: str, headers: Optional[Dict[str, str]] = None, json: Optional[dict] = None, data: Optional[Any] = None):
+    def post_json(self, path: str, headers: Optional[Dict[str, str]] = None, json: Optional[dict] = None, data: Optional[Any] = None) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
         return self.post(path, headers=headers, json=json, data=data).json(object_hook=self._json_object_hook)
 
@@ -242,7 +256,7 @@ class Connection:
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
         return self.post(path, headers=headers, json=json, data=data).text
 
-    def _put(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None, data: Optional[Any] = None):
+    def _put(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None, data: Optional[Any] = None) -> Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
         resp = self.session.put(url, headers=headers, params=params, json=json, data=data)
         if resp.status_code in (401, 403) and self.authenticator:
@@ -250,7 +264,7 @@ class Connection:
             resp = self.session.put(url, headers=headers, params=params, json=json, data=data)
         return resp
 
-    def put(self, path: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None, data: Optional[Any] = None):
+    def put(self, path: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None, data: Optional[Any] = None) -> Response:
         url = self.make_url(path)
         resp = self._put(url, headers=headers, params=params, json=json, data=data)
         if resp.status_code == 200:
@@ -281,7 +295,7 @@ class Connection:
             resp = self.session.get(url, headers=headers, data=data)
         return resp
 
-    def get(self, path: str, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None):
+    def get(self, path: str, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None) -> Response:
         url = self.make_url(path)
         resp = self._get(url, headers=headers, data=data)
         if resp.status_code == 200:
@@ -293,16 +307,22 @@ class Connection:
                 status_code=resp.status_code
             )
 
-    def get_json(self, path: str, headers: Optional[Dict[str, str]] = None):
+    def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
         return self.get(path, headers=headers).json(object_hook=self._json_object_hook)
 
-    def get_text(self, path: str, headers: Optional[Dict[str, str]] = None):
+    def get_text(self, path: str, headers: Optional[Dict[str, str]] = None) -> str:
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
         return self.get(path, headers=headers).text
 
-    def _delete(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[dict] = None,
-                data: Optional[Any] = None):
+    def _delete(
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[Any] = None,
+        json: Optional[dict] = None,
+        data: Optional[Any] = None
+    ) -> Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
         resp = self.session.delete(url, headers=headers, params=params, json=json, data=data)
         if resp.status_code in (401, 403) and self.authenticator:
@@ -310,7 +330,7 @@ class Connection:
             resp = self.session.delete(url, headers=headers, params=params, json=json, data=data)
         return resp
 
-    def delete(self, path: str, headers: Optional[Dict[str, str]] = None):
+    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> Response:
         url = self.make_url(path)
         resp = self._delete(url, headers=headers)
         if resp.status_code == 200:
@@ -322,20 +342,27 @@ class Connection:
                 status_code=resp.status_code
             )
 
-    def get_bytes(self, path: str, mime_type: Optional[str] = None, data: Optional[Any] = None) -> Tuple[bytes, str, str]:
+    def get_bytes(
+        self,
+        path: str,
+        mime_type: Optional[str] = None,
+        data: Optional[Any] = None
+    ) -> Tuple[bytes, str, str]:
         url = self.make_url(path)
         resp = self._get(url, headers={"Accept": mime_type if mime_type else "*/*"}, data=data)
         if resp.status_code == 200:
             content_type = resp.headers.get("Content-Type", "application/octet-stream")
             content_length = resp.headers.get("Content-Length")
-            content_disposition = parser.parse_content_disposition(resp.headers.get("Content-Disposition"))
+            content_disposition = parser.parse_content_disposition(resp.headers.get("Content-Disposition", ""))
             if content_length and len(resp.content) != int(content_length):
                 raise errors.ResourceError(
                     f"Unexpected content length: expected {content_length}, got {len(resp.content)}",
                     url=url, status_code=resp.status_code)
-            return resp.content, content_type, content_disposition.get("filename", "unknown.bin")
+            return resp.content, content_type, content_disposition.get("filename") or "unknown.bin"
         raise errors.ResourceNotFoundError(
             f"Download failed, code {resp.status_code}",
-            url=url, status_code=resp.status_code)
+            url=url,
+            status_code=resp.status_code,
+        )
 
 # vim: set et sw=4 ts=4:
