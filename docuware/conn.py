@@ -225,10 +225,12 @@ class Connection(types.ConnectionP):
         data: Optional[Any] = None
     ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        resp = self.session.post(url, headers=headers, json=json, data=data)
+        content = data if isinstance(data, (bytes, str)) else None
+        data = data if isinstance(data, dict) else None
+        resp = self.session.post(url, headers=headers, json=json, data=data, content=content)
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
-            resp = self.session.post(url, headers=headers, json=json, data=data)
+            resp = self.session.post(url, headers=headers, json=json, data=data, content=content)
         return resp
 
     def post(
@@ -236,13 +238,8 @@ class Connection(types.ConnectionP):
         path: str,
         headers: Optional[Dict[str, str]] = None,
         json: Optional[Dict] = None,
-<<<<<<< HEAD
-        data: Optional[Any] = None,
-    ) -> Response:
-=======
         data: Optional[Any] = None
     ) -> httpx.Response:
->>>>>>> 54cf291 (requests -> httpx)
         url = self.make_url(path)
         resp = self._post(url, headers=headers, json=json, data=data)
         if resp.status_code == 200:
@@ -276,14 +273,12 @@ class Connection(types.ConnectionP):
 
     def _put(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[Dict] = None, data: Optional[Any] = None) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        resp = self.session.put(
-            url, headers=headers, params=params, json=json, data=data
-        )
+        content = data if isinstance(data, (bytes, str)) else None
+        data = data if isinstance(data, dict) else None
+        resp = self.session.put(url, headers=headers, params=params, json=json, data=data, content=content)
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
-            resp = self.session.put(
-                url, headers=headers, params=params, json=json, data=data
-            )
+            resp = self.session.put(url, headers=headers, params=params, json=json, data=data, content=content)
         return resp
 
     def put(self, path: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None, json: Optional[Dict] = None, data: Optional[Any] = None) -> httpx.Response:
@@ -321,17 +316,17 @@ class Connection(types.ConnectionP):
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
         return self.put(path, headers=headers, params=params, json=json, data=data).text
 
-    def _get(self, url: str, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None) -> httpx.Response:
+    def _get(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        resp = self.session.get(url, headers=headers)
+        resp = self.session.get(url, headers=headers, params=params)
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
-            resp = self.session.get(url, headers=headers)
+            resp = self.session.get(url, headers=headers, params=params)
         return resp
 
-    def get(self, path: str, headers: Optional[Dict[str, str]] = None) -> httpx.Response:
+    def get(self, path: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None) -> httpx.Response:
         url = self.make_url(path)
-        resp = self._get(url, headers=headers)
+        resp = self._get(url, headers=headers, params=params)
         if resp.status_code == 200:
             return resp
         else:
@@ -353,9 +348,7 @@ class Connection(types.ConnectionP):
         self,
         url: str,
         headers: Optional[Dict[str, str]] = None,
-        params: Optional[Any] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None
+        params: Optional[Any] = None
     ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
         resp = self.session.delete(url, headers=headers, params=params)
@@ -364,9 +357,9 @@ class Connection(types.ConnectionP):
             resp = self.session.delete(url, headers=headers, params=params)
         return resp
 
-    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> httpx.Response:
+    def delete(self, path: str, headers: Optional[Dict[str, str]] = None, params: Optional[Any] = None) -> httpx.Response:
         url = self.make_url(path)
-        resp = self._delete(url, headers=headers)
+        resp = self._delete(url, headers=headers, params=params)
         if resp.status_code == 200:
             return resp
         else:
@@ -379,10 +372,11 @@ class Connection(types.ConnectionP):
     def get_bytes(
         self,
         path: str,
-        mime_type: Optional[str] = None
+        mime_type: Optional[str] = None,
+        params: Optional[Any] = None
     ) -> Tuple[bytes, str, str]:
         url = self.make_url(path)
-        resp = self._get(url, headers={"Accept": mime_type if mime_type else "*/*"})
+        resp = self._get(url, headers={"Accept": mime_type if mime_type else "*/*"}, params=params)
         if resp.status_code == 200:
             content_type = resp.headers.get("Content-Type", "application/octet-stream")
             content_length = resp.headers.get("Content-Length")

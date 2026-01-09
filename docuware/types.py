@@ -17,7 +17,9 @@ from typing import (
     overload,
 )
 
-from httpx import Client, Response
+from docuware import cidict
+
+import httpx
 
 class IdP(Protocol):
     @property
@@ -37,7 +39,7 @@ IdNameT = TypeVar("IdNameT", bound="IdNameP")
 
 
 class AuthenticatorP(Protocol):
-    def authenticate(self, conn: ConnectionP) -> Client: ...
+    def authenticate(self, conn: ConnectionP) -> httpx.Client: ...
 
     def login(self, conn: ConnectionP) -> Dict: ...
 
@@ -46,7 +48,7 @@ class AuthenticatorP(Protocol):
 
 class ConnectionP(Protocol):
     authenticator: Optional[AuthenticatorP]
-    session: Client
+    session: httpx.Client
     _json_object_hook: Optional[Callable[[object], object]]
 
     def make_path(self, path: str, query: Dict[str, str]) -> str: ...
@@ -59,7 +61,7 @@ class ConnectionP(Protocol):
         headers: Optional[Dict[str, str]] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
-    ) -> Response: ...
+    ) -> httpx.Response: ...
 
     def post_json(
         self,
@@ -84,7 +86,7 @@ class ConnectionP(Protocol):
         params: Optional[Any] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
-    ) -> Response: ...
+    ) -> httpx.Response: ...
 
     def put_json(
         self,
@@ -99,19 +101,20 @@ class ConnectionP(Protocol):
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        data: Optional[Any] = None,
-    ) -> Response: ...
+        params: Optional[Any] = None,
+    ) -> httpx.Response: ...
 
     def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any: ...
 
     def get_text(self, path: str, headers: Optional[Dict[str, str]] = None) -> str: ...
 
-    def delete(
-        self, path: str, headers: Optional[Dict[str, str]] = None
-    ) -> Response: ...
+    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> httpx.Response: ...
 
     def get_bytes(
-        self, path: str, mime_type: Optional[str] = None, data: Optional[Any] = None
+        self,
+        path: str,
+        mime_type: Optional[str] = None,
+        params: Optional[Any] = None,
     ) -> Tuple[bytes, str, str]: ...
 
 

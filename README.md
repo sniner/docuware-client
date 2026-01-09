@@ -98,7 +98,7 @@ for result in dlg.search("DOCNO=123456"):
 for result in dlg.search(["DOCNO=123456", "DOCNO=654321"], operation=docuware.OR):
     print(result)
 # Search for documents in a date range (01-31 January 2023):
-for result in dlg.search("DWSTOREDATETIME=2023-01-01T00:00:00,2023-02-01T00:00:00")
+for result in dlg.search("DWSTOREDATETIME=2023-01-01T00:00:00,2023-02-01T00:00:00"):
     print(result)
 ```
 
@@ -154,7 +154,7 @@ fields = {
     "FIELD1": "value1",
     "FIELD2": 99999
 }
-response = fc.update_data_entry(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], user_fields)
+response = fc.update_data_entry(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], fields)
 ```
 
 Delete documents:

@@ -40,7 +40,7 @@ class Document:
     ) -> Tuple[bytes, str, str]:
         return client.conn.get_bytes(
             endpoint,
-            data={
+            params={
                 "keepAnnotations": "true" if keep_annotations else "false",
                 "targetFileType": "PDF" if keep_annotations else "Auto",
             },
