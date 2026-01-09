@@ -8,7 +8,7 @@ class DocuwareClientException(Exception):
         self.url = url
         self.status_code = status_code
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.url:
             return f"[{self.url}] {super().__str__()}"
         else:

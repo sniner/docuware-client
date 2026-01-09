@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 class Document:
-    def __init__(self, config: dict, file_cabinet: types.FileCabinetP):
+    def __init__(self, config: Dict, file_cabinet: types.FileCabinetP):
         self.file_cabinet = file_cabinet
         self.id = config.get("Id")
         self.title = config.get("Title")
@@ -24,7 +24,7 @@ class Document:
     def client(self) -> types.DocuwareClientP:
         return self.file_cabinet.organization.client
 
-    def field(self, key: str, default: Union[Any, None, types.Nothing] = types.NOTHING):
+    def field(self, key: str, default: Optional[Any] = None) -> Optional[fields.FieldValue]:
         return structs.first_item_by_id_or_name(self.fields, key, default=default)
 
     @staticmethod
@@ -59,16 +59,16 @@ class Document:
             raise  # FIXME: specific exception
         else:
             self.id = None
-            self.endpoints = {}
+            self.endpoints: Dict[str, str] = {}
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.title}' [{self.id}]"
 
 
 # Attachment seems more reasonable than Section. In the DocuWare context a section is
 # not a part of a file or document, but an individual attachment to the DocuWare document.
 class DocumentAttachment:
-    def __init__(self, config: dict, document: Document):
+    def __init__(self, config: Dict, document: Document):
         self.document = document
         self.content_type = config.get("ContentType")
         self.filename = config.get("OriginalFileName")
@@ -83,7 +83,7 @@ class DocumentAttachment:
     def client(self) -> types.DocuwareClientP:
         return self.document.client
 
-    def _fetch_endpoints(self):
+    def _fetch_endpoints(self) -> None:
         if "fileDownload" not in self.endpoints:
             config = self.client.conn.get_json(self.endpoints["self"])
             self.endpoints = structs.Endpoints(config)
@@ -97,8 +97,8 @@ class DocumentAttachment:
         )
         return data, mime, self.filename or filename
 
-    def delete(self):
+    def delete(self) -> None:
         raise NotImplementedError
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Attachment '{self.filename}' [{self.id}, {self.content_type}]"

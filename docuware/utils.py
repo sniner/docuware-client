@@ -10,7 +10,7 @@ from docuware import errors, cidict
 DATE_PATTERN = re.compile(r"/Date\((\d+)\)/")
 
 
-def datetime_from_string(value: str, auto_date: bool = False) -> Union[date, datetime, None]:
+def datetime_from_string(value: Optional[str], auto_date: bool = False) -> Union[date, datetime, None]:
     """
     NB: Dates earlier than 1970 and later than 2038 break the code, and not just
     for the document with the incorrect date entry, but also for all remaining
@@ -26,7 +26,7 @@ def datetime_from_string(value: str, auto_date: bool = False) -> Union[date, dat
                 try:
                     dt = datetime.fromtimestamp(unix_timestamp)
                 except:
-                    dt = None
+                    return None
                 if auto_date:
                     if dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0:
                         return date(dt.year, dt.month, dt.day)
@@ -92,7 +92,7 @@ def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
     return candidate
 
 
-def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]):
+def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> None:
     path = unique_filename(path)
     with open(path, "wb") as f:
         f.write(blob)

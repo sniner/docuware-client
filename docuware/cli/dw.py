@@ -8,7 +8,7 @@ from typing import Optional
 import docuware
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     def case_insensitive_string_opt(arg: Optional[str]) -> Optional[str]:
         if arg is None:
             return None
@@ -135,7 +135,7 @@ def indent(n: int) -> str:
 
 
 def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
-    def get_search_dlg(name: str):
+    def get_search_dlg(name: str) -> Optional[docuware.SearchDialog]:
         for org in dw.organizations:
             for fc in org.file_cabinets:
                 if fc.name.casefold() == name:
@@ -173,31 +173,31 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
 
 
 def list_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
-    def show_field(fld):
+    def show_field(fld: types.SearchFieldP) -> None:
         print(indent(3), fld)
         if args.field and fld.name.casefold() == args.field:
             for choice in fld.values():
                 print(indent(4), choice)
 
-    def show_searchdialog(dlg):
+    def show_searchdialog(dlg: types.SearchDialogP) -> None:
         print(indent(2), dlg)
         for fld in sorted(dlg.fields.values(), key=lambda f: f.name):
             show_field(fld)
 
-    def show_dialog(dlg):
+    def show_dialog(dlg: types.DialogP) -> None:
         if args.dialog is None or dlg.name.casefold() == args.dialog:
             if isinstance(dlg, docuware.SearchDialog):
                 show_searchdialog(dlg)
             else:
                 print(indent(2), dlg)
 
-    def show_filecabinet(fc):
+    def show_filecabinet(fc: types.FileCabinetP) -> None:
         if args.file_cabinet is None or fc.name.casefold() == args.file_cabinet:
             print(indent(1), fc)
             for dlg in fc.dialogs:
                 show_dialog(dlg)
 
-    def show_org(org):
+    def show_org(org: types.OrganizationP) -> None:
         print(org)
         for fc in org.file_cabinets:
             show_filecabinet(fc)
@@ -219,10 +219,10 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     for org in dw.organizations:
         print(org)
         print(indent(1), "Company names:")
-        for cn in org.info.get("CompanyNames", []):
+        for cn in org.info.get("CompanyNames") or []:
             print(indent(2), cn)
         print(indent(1), "Company address:")
-        for al in org.info.get("AddressLines", []):
+        for al in org.info.get("AddressLines") or []:
             print(indent(2), al)
         print(indent(1), "Administrator:", org.info.get("Administrator"))
         print(indent(1), "Email:", org.info.get("EMail"))
@@ -231,7 +231,7 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     return 0
 
 
-def main():
+def main() -> None:
     args = parse_arguments()
     cred_file = args.config_dir / ".credentials"
     session_file = args.config_dir / ".session"

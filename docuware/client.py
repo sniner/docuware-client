@@ -12,27 +12,27 @@ log = logging.getLogger(__name__)
 class DocuwareClient(types.DocuwareClientP):
     def __init__(self, url: str, verify_certificate: bool = True):
         self.conn = conn.Connection(url, case_insensitive=True, verify_certificate=verify_certificate)
-        self.endpoints = {}
-        self.resources = {}
-        self.version = None
+        self.endpoints: Dict[str, str] = {}
+        self.resources: Dict[str, str] = {}
+        self.version: Optional[str] = None
 
     @property
     def organizations(self) -> Generator[types.OrganizationP, None, None]:
         result = self.conn.get_json(self.endpoints["organizations"])
         return (organization.Organization(org, self) for org in result.get("Organization", []))
 
-    def organization(self, key: str, default: Union[types.OrganizationP, None, types.Nothing] = types.NOTHING) -> Optional[types.OrganizationP]:
+    def organization(self, key: str, *, required: bool = False) -> Optional[types.OrganizationP]:
         """Access organization by id or name."""
-        return structs.first_item_by_id_or_name(self.organizations, key, default=default)
+        return structs.first_item_by_id_or_name(self.organizations, key, required=required)
 
     def login(
         self,
         username: str,
         password: str,
         organization: Optional[str] = None,
-        saved_session: Optional[dict] = None,
+        saved_session: Optional[Dict] = None,
         oauth2: Optional[bool] = None,
-    ) -> dict:
+    ) -> Dict:
         if oauth2 is None:
             oauth2 = "access_token" in saved_session if saved_session else True
 

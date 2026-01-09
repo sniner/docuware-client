@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "docuware-client"
-version = "0.5.2"
+version = "0.5.3"
 description = "DocuWare REST-API client"
 authors = ["Stefan Schönberger <mail@sniner.dev>"]
 readme = "README.md"
