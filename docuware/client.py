@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, Generator, Optional
 
-from docuware import conn, organization, structs, types
+from docuware import conn, organization, structs, types, errors, utils
 
 log = logging.getLogger(__name__)
 

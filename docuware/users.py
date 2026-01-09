@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any, Dict, Generator, Optional
 
-import requests
+import httpx
 
 from . import errors, structs, types, utils
 
@@ -142,13 +142,9 @@ class User:
                 raise errors.UserOrGroupError(f"Not a registered user: {self}")
             body = self.as_dict(overrides={"Active": state})
             try:
-                _result = self.organization.conn.post_json(
-                    self.organization.endpoints["userInfo"], json=body
-                )
-            except requests.RequestException as exc:
-                raise errors.UserOrGroupError(
-                    f"Unable to set activation status of user {self}: {exc}"
-                )
+                result = self.organization.conn.post_json(self.organization.endpoints["userInfo"], json=body)
+            except httpx.HTTPError as exc:
+                raise errors.UserOrGroupError(f"Unable to set activation status of user {self}: {exc}")
             else:
                 self._active = state
 

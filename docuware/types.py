@@ -17,11 +17,7 @@ from typing import (
     overload,
 )
 
-from requests import Session
-from requests.models import Response
-
-from docuware import cidict
-
+from httpx import Client, Response
 
 class IdP(Protocol):
     @property
@@ -41,7 +37,7 @@ IdNameT = TypeVar("IdNameT", bound="IdNameP")
 
 
 class AuthenticatorP(Protocol):
-    def authenticate(self, conn: ConnectionP) -> Session: ...
+    def authenticate(self, conn: ConnectionP) -> Client: ...
 
     def login(self, conn: ConnectionP) -> Dict: ...
 
@@ -50,7 +46,7 @@ class AuthenticatorP(Protocol):
 
 class ConnectionP(Protocol):
     authenticator: Optional[AuthenticatorP]
-    session: Session
+    session: Client
     _json_object_hook: Optional[Callable[[object], object]]
 
     def make_path(self, path: str, query: Dict[str, str]) -> str: ...
