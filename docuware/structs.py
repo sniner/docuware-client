@@ -105,7 +105,11 @@ def first_item_by_id_or_name(
 ) -> Optional[types.IdNameT]:
     name = key.casefold()
     for item in items:
-        if item.id == key or item.name.casefold() == name:
+        i_id = getattr(item, "id", None)
+        i_name = getattr(item, "name", None)
+        if (i_id is not None and i_id == key) or (
+            i_name is not None and i_name.casefold() == name
+        ):
             return item
     if required:
         raise KeyError(key)

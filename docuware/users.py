@@ -11,7 +11,7 @@ from . import errors, structs, types, utils
 log = logging.getLogger(__name__)
 
 
-class User(types.UserP):
+class User:
     def __init__(
         self,
         name: Optional[str] = None,
@@ -104,7 +104,7 @@ class User(types.UserP):
         u._full_name = response.get("Name")
         u._first_name = response.get("FirstName")
         u._last_name = response.get("LastName")
-        u.id = response.get("Id", "")
+        u.id = str(response.get("Id") or "")
         u.db_name = response.get("DBName")
         u._active = response.get("Active")
         u.endpoints = structs.Endpoints(response)

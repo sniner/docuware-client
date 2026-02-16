@@ -10,14 +10,14 @@ log = logging.getLogger(__name__)
 FieldValueConfigT = Dict[str, Any]
 
 
-class FieldValue(types.FieldValueP):
+class FieldValue:
     TYPE_TABLE: cidict.CaseInsensitiveDict[Type[FieldValue]] = (
         cidict.CaseInsensitiveDict()
     )
 
     def __init__(self, config: FieldValueConfigT):
-        self.name = config.get("FieldLabel", "")
-        self.id = config.get("FieldName", "")
+        self.name = str(config.get("FieldLabel") or "")
+        self.id = str(config.get("FieldName") or "")
         self.content_type = config.get("ItemElementName")
         self.read_only = config.get("ReadOnly", True)
         self.internal = config.get("SystemField", False)
