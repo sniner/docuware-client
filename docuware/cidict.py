@@ -3,10 +3,23 @@ Case-insensitive dictionary.
 """
 
 from __future__ import annotations
-from collections.abc import MutableMapping, ItemsView, KeysView, ValuesView
-from typing import Any, Dict, Generator, Generic, Iterator, Optional, Tuple, TypeVar
 
-VT = TypeVar('VT')
+from collections.abc import ItemsView, KeysView, MutableMapping, ValuesView
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    Generic,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    overload,
+)
+
+VT = TypeVar("VT")
+T = TypeVar("T")
+
 
 class CaseInsensitiveDict(MutableMapping[str, VT], Generic[VT]):
     def __init__(self, initial_values: Any = None, **kwargs: VT) -> None:
@@ -16,7 +29,7 @@ class CaseInsensitiveDict(MutableMapping[str, VT], Generic[VT]):
                 for key, value in initial_values.items():
                     self.__setitem__(key, value)
             elif isinstance(initial_values, (list, tuple)):
-                for (key, value) in initial_values:
+                for key, value in initial_values:
                     self.__setitem__(key, value)
             else:
                 raise TypeError("Unsupported type for initial_values")
@@ -51,9 +64,17 @@ class CaseInsensitiveDict(MutableMapping[str, VT], Generic[VT]):
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, CaseInsensitiveDict):
             return NotImplemented
-        return dict(self.case_insensitive_items()) == dict(other.case_insensitive_items())
+        return dict(self.case_insensitive_items()) == dict(
+            other.case_insensitive_items()
+        )
 
-    def get(self, key: str, default: Optional[VT] = None) -> Optional[VT]:
+    @overload
+    def get(self, key: str) -> Optional[VT]: ...
+
+    @overload
+    def get(self, key: str, default: Union[VT, T]) -> Union[VT, T]: ...
+
+    def get(self, key: str, default: Any = None) -> Any:
         try:
             return self.__getitem__(key)
         except KeyError:
@@ -76,5 +97,6 @@ class CaseInsensitiveDict(MutableMapping[str, VT], Generic[VT]):
 
     def __repr__(self) -> str:
         return str(dict(self.items()))
+
 
 # vim: set et sw=4 ts=4:

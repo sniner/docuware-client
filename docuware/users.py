@@ -1,34 +1,33 @@
 from __future__ import annotations
-import logging
-from typing import Any, Dict, Generator, Iterator, Optional, Union
 
+import logging
 import re
+from typing import Any, Dict, Generator, Optional
+
 import requests
 
-from . import errors, types, structs, utils
-
+from . import errors, structs, types, utils
 
 log = logging.getLogger(__name__)
 
 
-
 class User(types.UserP):
     def __init__(
-            self,
-            name: Optional[str] = None,
-            first_name: Optional[str] = None,
-            last_name: Optional[str] = None,
-            salutation: Optional[str] = None,
-            email: Optional[str] = None,
-            db_name: Optional[str] = None,
-        ):
+        self,
+        name: Optional[str] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        salutation: Optional[str] = None,
+        email: Optional[str] = None,
+        db_name: Optional[str] = None,
+    ):
         self.salutation: Optional[str] = salutation
         self.email: Optional[str] = email
         self.db_name: Optional[str] = db_name
         self.organization: Optional[types.OrganizationP] = None
-        self.id: Optional[str] = None
+        self.id: str = ""
         self.endpoints: Optional[types.EndpointsP] = None
-        self._first_name:  Optional[str] = first_name
+        self._first_name: Optional[str] = first_name
         self._last_name: Optional[str] = last_name
         self._full_name: Optional[str] = None
         self._active: Optional[bool] = None
@@ -43,7 +42,8 @@ class User(types.UserP):
             return " ".join([n for n in [self._first_name, self._last_name] if n])
 
     @name.setter
-    def name(self, name: str) -> None:
+    def name(self, value: str) -> None:
+        name = value
         if name:
             self._full_name = name
             parts = name.split(", ", 1)
@@ -83,7 +83,10 @@ class User(types.UserP):
     def groups(self) -> Generator[Group, None, None]:
         if self.organization and self.endpoints:
             result = self.organization.client.conn.get_json(self.endpoints["groups"])
-            return (Group.from_response(g, self.organization) for g in result.get("Item", []))
+            return (
+                Group.from_response(g, self.organization)
+                for g in result.get("Item", [])
+            )
         else:
             return (Group("") for _ in [])
 
@@ -101,7 +104,7 @@ class User(types.UserP):
         u._full_name = response.get("Name")
         u._first_name = response.get("FirstName")
         u._last_name = response.get("LastName")
-        u.id = response.get("Id")
+        u.id = response.get("Id", "")
         u.db_name = response.get("DBName")
         u._active = response.get("Active")
         u.endpoints = structs.Endpoints(response)
@@ -110,7 +113,8 @@ class User(types.UserP):
 
     def as_dict(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
         d = {
-            item[0]: item[1] for item in [
+            item[0]: item[1]
+            for item in [
                 ("Name", self.name),
                 ("FirstName", self.first_name),
                 ("LastName", self.last_name),
@@ -119,7 +123,8 @@ class User(types.UserP):
                 ("Id", self.id),
                 ("DBName", self.db_name),
                 ("Active", self.active),
-            ] if item[1]
+            ]
+            if item[1]
         }
         if overrides:
             return {**d, **overrides}
@@ -137,9 +142,13 @@ class User(types.UserP):
                 raise errors.UserOrGroupError(f"Not a registered user: {self}")
             body = self.as_dict(overrides={"Active": state})
             try:
-                result = self.organization.conn.post_json(self.organization.endpoints["userInfo"], json=body)
+                _result = self.organization.conn.post_json(
+                    self.organization.endpoints["userInfo"], json=body
+                )
             except requests.RequestException as exc:
-                raise errors.UserOrGroupError(f"Unable to set activation status of user {self}: {exc}")
+                raise errors.UserOrGroupError(
+                    f"Unable to set activation status of user {self}: {exc}"
+                )
             else:
                 self._active = state
 
@@ -162,18 +171,25 @@ class Users(types.UsersP):
 
     def __iter__(self) -> Generator[types.UserP, None, None]:
         result = self.organization.conn.get_json(self.organization.endpoints["users"])
-        return (User.from_response(user, self.organization) for user in result.get("User", []))
+        return (
+            User.from_response(user, self.organization)
+            for user in result.get("User", [])
+        )
 
     def __getitem__(self, key: str) -> types.UserP:
         return structs.first_item_by_id_or_name(self, key)
 
-    def get(self, key: str, default: Optional[types.UserP] = None) -> Optional[types.UserP]:
+    def get(
+        self, key: str, default: Optional[types.UserP] = None
+    ) -> Optional[types.UserP]:
         try:
             return self.__getitem__(key)
         except KeyError:
             return default
 
-    def add(self, user: types.UserP, password: Optional[str] = None) -> Optional[types.UserP]:
+    def add(
+        self, user: types.UserP, password: Optional[str] = None
+    ) -> Optional[types.UserP]:
         headers = {
             "Content-Type": "application/vnd.docuware.platform.createorganizationuser+json"
         }
@@ -182,7 +198,7 @@ class Users(types.UsersP):
             if "DBName" not in body:
                 body["DBName"] = user.make_db_name()
             body["Password"] = password or utils.random_password()
-            result = self.organization.conn.post_json(
+            _result = self.organization.conn.post_json(
                 self.organization.endpoints["userInfo"],
                 headers=headers,
                 json=body,
@@ -192,24 +208,24 @@ class Users(types.UsersP):
             return None
         # FIXME: Check result instead of this hack:
         for item in self:
-            if item.db_name == body.db_name:
+            if getattr(item, "db_name", None) == body.get("DBName"):
                 return item
         return None
 
 
 class Group:
+
+
     def __init__(self, name: str):
         self.name = name
-        self.id: Optional[str] = None
+        self.id: str = ""
         self.organization: Optional[types.OrganizationP] = None
         self.endpoints: Optional[types.EndpointsP] = None
 
     @staticmethod
     def from_response(response: Dict, organization: types.OrganizationP) -> Group:
-        g = Group(
-            name=response.get("Name")
-        )
-        g.id = response.get("Id")
+        g = Group(name=response.get("Name") or "")
+        g.id = response.get("Id") or ""
         g.endpoints = structs.Endpoints(response)
         g.organization = organization
         return g
@@ -219,31 +235,27 @@ class Group:
         if not self.organization or not self.endpoints:
             return (User("") for _ in [])
         result = self.organization.client.conn.get_json(self.endpoints["users"])
-        return (User.from_response(u, self.organization) for u in result.get("User", []))
+        return (
+            User.from_response(u, self.organization) for u in result.get("User", [])
+        )
 
     # FIXME: Testing needed, the endpoint looks very suspicious
-    def _set_user_membership(self, user: User, include: bool) -> bool:
+    def _set_user_membership(self, user: types.UserP, include: bool) -> bool:
         if not self.id:
             # FIXME: raise a better suited exception
             raise ValueError("Not a registered group")
+        if not self.organization:
+            raise ValueError("Group not bound to an organization")
         if not user.id:
             # FIXME: raise a better suited exception
             raise ValueError("Not a registered user")
 
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
-        body = {
-            "Ids": [
-                self.id
-            ],
-            "OperationType": "Add" if include else "Remove"
-        }
+        body = {"Ids": [self.id], "OperationType": "Add" if include else "Remove"}
 
         try:
-            result = self.organization.conn.put(
+            _result = self.organization.conn.put(
                 "/DocuWare/Platform/Organization/UserGroups",
                 headers=headers,
                 params={"UserId": user.id},
@@ -255,10 +267,10 @@ class Group:
             return False
         return True
 
-    def add_user(self, user: User) -> bool:
+    def add_user(self, user: types.UserP) -> bool:
         return self._set_user_membership(user, include=True)
 
-    def remove_user(self, user: User) -> bool:
+    def remove_user(self, user: types.UserP) -> bool:
         return self._set_user_membership(user, include=False)
 
     def __str__(self) -> str:
@@ -273,16 +285,24 @@ class Groups:
         self.organization = organization
 
     def __iter__(self) -> Generator[types.GroupP, None, None]:
-        result = self.organization.client.conn.get_json(self.organization.endpoints["groups"])
-        return (Group.from_response(group, self.organization) for group in result.get("Item", []))
+        result = self.organization.client.conn.get_json(
+            self.organization.endpoints["groups"]
+        )
+        return (
+            Group.from_response(group, self.organization)
+            for group in result.get("Item", [])
+        )
 
-    def __getitem__(self, key: str) -> Group:
+    def __getitem__(self, key: str) -> types.GroupP:
         return structs.first_item_by_id_or_name(self, key)
 
-    def get(self, key: str, default: Optional[Group] = None) -> Optional[Group]:
+    def get(
+        self, key: str, default: Optional[types.GroupP] = None
+    ) -> Optional[types.GroupP]:
         try:
             return self.__getitem__(key)
         except KeyError:
             return default
+
 
 # vim: set et sw=4 ts=4:

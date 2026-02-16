@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import collections
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -30,7 +31,9 @@ class CharReader:
         return f"CharReader({repr(self.text)})"
 
 
-def parse_content_disposition(text: str, case_insensitive: bool = True) -> Union[Dict[str, str], cidict.CaseInsensitiveDict]:
+def parse_content_disposition(
+    text: Optional[str], case_insensitive: bool = True
+) -> Union[Dict[str, str], cidict.CaseInsensitiveDict]:
     """
     Parser for HTTP Content-Disposition header values. For example 'attachment; filename="filename.jpg"' will
     return { type: "attachment", filename: "filename.jpg" }.
@@ -183,7 +186,7 @@ def parse_search_condition(text: str) -> Tuple[str, List[str]]:
                 break
             elif ch.isspace():
                 pass
-            elif ch == "\"":
+            elif ch == '"':
                 state = 20
             elif ch == "\\":
                 state = 11
@@ -197,7 +200,7 @@ def parse_search_condition(text: str) -> Tuple[str, List[str]]:
             else:
                 value += ch
         elif state == 20:  # "keyword"
-            if ch is None or ch == "\"":
+            if ch is None or ch == '"':
                 # unexpected end
                 state = 30
             elif ch == "\\":
@@ -214,5 +217,6 @@ def parse_search_condition(text: str) -> Tuple[str, List[str]]:
                 state = 10
 
     return fieldname, keywords
+
 
 # vim: set et sw=4 ts=4:

@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import logging
 
-from docuware import conn, structs, types, utils, organization
+from docuware import structs, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -31,5 +32,6 @@ class MyTasks(types.MyTasksP):
             return next(self._tasks)
         else:
             raise StopIteration
+
 
 # vim: set et sw=4 ts=4:

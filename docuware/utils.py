@@ -1,16 +1,19 @@
 from __future__ import annotations
+
 import pathlib
 import random
 import re
-from datetime import datetime, date
-from typing import Union, Optional
+from datetime import date, datetime
+from typing import Optional, Union
 
-from docuware import errors, cidict
+from docuware import errors
 
 DATE_PATTERN = re.compile(r"/Date\((\d+)\)/")
 
 
-def datetime_from_string(value: Optional[str], auto_date: bool = False) -> Union[date, datetime, None]:
+def datetime_from_string(
+    value: Optional[str], auto_date: bool = False
+) -> Union[date, datetime, None]:
     """
     NB: Dates earlier than 1970 and later than 2038 break the code, and not just
     for the document with the incorrect date entry, but also for all remaining
@@ -25,16 +28,23 @@ def datetime_from_string(value: Optional[str], auto_date: bool = False) -> Union
                 unix_timestamp = msec / 1000
                 try:
                     dt = datetime.fromtimestamp(unix_timestamp)
-                except:
+                except Exception:
                     return None
                 if auto_date:
-                    if dt.hour == 0 and dt.minute == 0 and dt.second == 0 and dt.microsecond == 0:
+                    if (
+                        dt.hour == 0
+                        and dt.minute == 0
+                        and dt.second == 0
+                        and dt.microsecond == 0
+                    ):
                         return date(dt.year, dt.month, dt.day)
                 return dt
             else:
                 # WTF: negative timestamps ... ?!
                 return None
-        raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
+        raise errors.DataError(
+            f"Value must be formatted like '/Date(...)/', found '{value}'"
+        )
     else:
         return None
 
@@ -54,12 +64,14 @@ def date_from_string(value: str) -> Optional[date]:
                 unix_timestamp = msec / 1000
                 try:
                     dt = date.fromtimestamp(unix_timestamp)
-                except:
+                except Exception:
                     dt = None
                 return dt
             else:
                 return None
-        raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
+        raise errors.DataError(
+            f"Value must be formatted like '/Date(...)/', found '{value}'"
+        )
     else:
         return None
 
@@ -87,7 +99,9 @@ def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
     while candidate.exists():
         n += 1
         if n > 1000:
-            raise errors.InternalError(f"Unable to create file {path}: too many duplicates")
+            raise errors.InternalError(
+                f"Unable to create file {path}: too many duplicates"
+            )
         candidate = pathlib.Path(f"{stem}({n}){suffix}")
     return candidate
 
@@ -99,6 +113,12 @@ def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> None:
 
 
 def random_password(length: int = 16) -> str:
-    return "".join(random.choices("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.,;:-_/+=", k=length))
+    return "".join(
+        random.choices(
+            "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.,;:-_/+=",
+            k=length,
+        )
+    )
+
 
 # vim: set et sw=4 ts=4:

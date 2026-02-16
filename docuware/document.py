@@ -1,8 +1,9 @@
 from __future__ import annotations
-import logging
-from typing import Any, Optional, Tuple, Union
 
-from docuware import structs, types, utils, fields
+import logging
+from typing import Any, Dict, Optional, Tuple
+
+from docuware import fields, structs, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -17,22 +18,33 @@ class Document:
         self.modified = utils.datetime_from_string(config.get("LastModified"))
         self.created = utils.datetime_from_string(config.get("CreatedAt"))
         self.endpoints = structs.Endpoints(config)
-        self.attachments = [DocumentAttachment(s, self) for s in config.get("Sections", [])]
-        self.fields = [fields.FieldValue.from_config(f) for f in config.get("Fields", [])]
+        self.attachments = [
+            DocumentAttachment(s, self) for s in config.get("Sections", [])
+        ]
+        self.fields = [
+            fields.FieldValue.from_config(f) for f in config.get("Fields", [])
+        ]
 
     @property
     def client(self) -> types.DocuwareClientP:
         return self.file_cabinet.organization.client
 
-    def field(self, key: str, default: Optional[Any] = None) -> Optional[fields.FieldValue]:
+    def field(
+        self, key: str, default: Optional[Any] = None
+    ) -> Optional[fields.FieldValue]:
         return structs.first_item_by_id_or_name(self.fields, key, default=default)
 
     @staticmethod
-    def _download(client: types.DocuwareClientP, endpoint: str, keep_annotations: bool = True) -> Tuple[bytes, str, str]:
-        return client.conn.get_bytes(endpoint, data={
-            "keepAnnotations": "true" if keep_annotations else "false",
-            "targetFileType": "PDF" if keep_annotations else "Auto",
-        })
+    def _download(
+        client: types.DocuwareClientP, endpoint: str, keep_annotations: bool = True
+    ) -> Tuple[bytes, str, str]:
+        return client.conn.get_bytes(
+            endpoint,
+            data={
+                "keepAnnotations": "true" if keep_annotations else "false",
+                "targetFileType": "PDF" if keep_annotations else "Auto",
+            },
+        )
 
     def thumbnail(self) -> Tuple[bytes, str, str]:
         return self.client.conn.get_bytes(self.endpoints["thumbnail"])
@@ -48,10 +60,7 @@ class Document:
         return self.client.conn.get_bytes(self.endpoints["downloadAsArchive"])
 
     def delete(self):
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         try:
             _ = self.client.conn.delete(self.endpoints["self"], headers=headers)
         except Exception as exc:
@@ -59,7 +68,7 @@ class Document:
             raise  # FIXME: specific exception
         else:
             self.id = None
-            self.endpoints: Dict[str, str] = {}
+            self.endpoints = structs.Endpoints({})
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.title}' [{self.id}]"

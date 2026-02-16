@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import logging
 import re
-from datetime import datetime, date
-from typing import Any, Iterator, Mapping, Union, List, Optional, Tuple, Dict
+from datetime import date, datetime
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
-from docuware import conn, errors, parser, structs, types, utils, document, fields
+from docuware import document, errors, fields, parser, structs, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -12,7 +13,9 @@ AND = "And"
 OR = "Or"
 
 
-class Dialog(types.DialogP):
+class Dialog:
+
+
     def __init__(self, config: Dict, file_cabinet: types.FileCabinetP):
         self.file_cabinet = file_cabinet
         self.client = file_cabinet.organization.client
@@ -59,8 +62,8 @@ class TaskListDialog(Dialog):
         if self._fields is None:
             config = self.client.conn.get_json(self.endpoints["self"])
             self._fields = {
-                f.id: f for f in
-                [SearchField(fld, self) for fld in config.get("Fields", [])]
+                f.id: f
+                for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
             }
 
     @property
@@ -78,8 +81,8 @@ class SearchDialog(Dialog):
         if self._fields is None:
             config = self.client.conn.get_json(self.endpoints["self"])
             self._fields = {
-                f.id: f for f in
-                [SearchField(fld, self) for fld in config.get("Fields", [])]
+                f.id: f
+                for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
             }
             # NB: SearchQuery depends on self.fields
             self._query = SearchQuery(config.get("Query", {}), self)
@@ -89,12 +92,17 @@ class SearchDialog(Dialog):
         self._load()
         return self._fields or {}
 
-    def search(self, conditions: types.SearchConditionsT, operation: Optional[str] = None) -> SearchResult:
+    def search(
+        self, conditions: types.SearchConditionsT, operation: Optional[str] = None
+    ) -> SearchResult:
         self._load()
         return self._query.search(conditions=conditions, operation=operation)
 
 
-class SearchField(types.SearchFieldP):
+class SearchField:
+
+
+
     def __init__(self, config: Dict, dialog: Dialog):
         self.dialog = dialog
         self.id: str = config.get("DBFieldName", "")
@@ -105,7 +113,9 @@ class SearchField(types.SearchFieldP):
 
     def values(self) -> List[Any]:
         if "simpleSelectList" in self.endpoints:
-            result = self.dialog.client.conn.get_json(self.endpoints["simpleSelectList"])
+            result = self.dialog.client.conn.get_json(
+                self.endpoints["simpleSelectList"]
+            )
             return result.get("Value", [])
         return []
 
@@ -155,10 +165,14 @@ class ConditionParser:
                 value = [str(value)]
         return field.id, value
 
-    def parse_list(self, conditions: Union[List[str], Tuple[str]]) -> List[Tuple[str, List[str]]]:
+    def parse_list(
+        self, conditions: Union[List[str], Tuple[str]]
+    ) -> List[Tuple[str, List[str]]]:
         return [self._term(*parser.parse_search_condition(c)) for c in conditions]
 
-    def parse_dict(self, conditions: Dict[str, Union[str, List[str]]]) -> List[Tuple[str, List[str]]]:
+    def parse_dict(
+        self, conditions: Dict[str, Union[str, List[str]]]
+    ) -> List[Tuple[str, List[str]]]:
         return [self._term(k, v) for k, v in conditions.items()]
 
     def parse(self, conditions: types.SearchConditionsT) -> List[Tuple[str, List[str]]]:
@@ -186,10 +200,12 @@ class SearchQuery:
             #     /DocuWare/Platform/FileCabinets/<FC_ID>/Query/DialogExpressionLink?dialogId=<DLG_ID>
             # Looks like a bug in DocuWare's API.
             if "dialogExpression" in self.endpoints:
-                self.endpoints["dialogExpressionLink"] = re.sub(r"/DialogExpression\b",
-                                                                "/DialogExpressionLink",
-                                                                self.endpoints["dialogExpression"],
-                                                                flags=re.IGNORECASE)
+                self.endpoints["dialogExpressionLink"] = re.sub(
+                    r"/DialogExpression\b",
+                    "/DialogExpressionLink",
+                    self.endpoints["dialogExpression"],
+                    flags=re.IGNORECASE,
+                )
             else:
                 raise errors.InternalError("Endpoint 'dialogExpression' missing")
 
@@ -202,13 +218,14 @@ class SearchQuery:
         conditions: types.SearchConditionsT,
         operation: Optional[str] = None,
         sort_field: Optional[str] = None,
-        sort_order: Optional[str] = None
+        sort_order: Optional[str] = None,
     ) -> SearchResult:
         terms = self.cond_parser.parse(conditions)
         query = {"fields": ",".join([t[0] for t in terms])}
         if sort_field:
-            query[
-                "sortOrder"] = f"{self.cond_parser.field_by_name(sort_field).id} {sort_order if sort_order else 'Asc'}"
+            query["sortOrder"] = (
+                f"{self.cond_parser.field_by_name(sort_field).id} {sort_order if sort_order else 'Asc'}"
+            )
         path = self.conn.make_path(self.endpoints["dialogExpressionLink"], query=query)
         data = {
             "Condition": [{"DBName": k, "Value": v} for k, v in terms],
@@ -252,7 +269,9 @@ class SearchResult:
 class SearchResultItem:
     def __init__(self, config: Dict, result: SearchResult):
         self.result = result
-        self.fields = [fields.FieldValue.from_config(f) for f in config.get("Fields", [])]
+        self.fields = [
+            fields.FieldValue.from_config(f) for f in config.get("Fields", [])
+        ]
         self.content_type = config.get("ContentType")
         self.title = config.get("Title")
         self.file_cabinet_id = config.get("FileCabinetId")
@@ -268,10 +287,13 @@ class SearchResultItem:
         if self._document is None:
             dw = self.result.query.dialog.client
             config = dw.conn.get_json(self.endpoints["self"])
-            self._document = document.Document(config, self.result.query.dialog.file_cabinet)
+            self._document = document.Document(
+                config, self.result.query.dialog.file_cabinet
+            )
         return self._document
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.title}' [{self.content_type}]"
+
 
 # vim: set et sw=4 ts=4:

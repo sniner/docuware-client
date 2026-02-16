@@ -1,13 +1,18 @@
 from __future__ import annotations
-import logging
-from typing import Dict, List, Literal, Optional, Union, overload
 
-from docuware import structs, types, dialogs
+import logging
+from typing import Any, Dict, List, Literal, Optional, Union, overload
+
+from requests.models import Response
+
+from docuware import dialogs, structs, types
 
 log = logging.getLogger(__name__)
 
 
-class FileCabinet(types.FileCabinetP):
+class FileCabinet:
+
+
     def __init__(self, config: Dict, organization: types.OrganizationP):
         self.organization = organization
         self.name = config.get("Name", "")
@@ -20,7 +25,8 @@ class FileCabinet(types.FileCabinetP):
         if self._dialogs is None:
             result = self.organization.client.conn.get_json(self.endpoints["dialogs"])
             self._dialogs = [
-                dialogs.Dialog.from_config(dlg, self) for dlg in result.get("Dialog", [])
+                dialogs.Dialog.from_config(dlg, self)
+                for dlg in result.get("Dialog", [])
                 if dlg.get("$type") == "DialogInfo" and ("_" not in dlg.get("Id"))
                 # and (dlg.get("IsDefault") or dlg.get("IsForMobile"))
             ]
@@ -30,20 +36,31 @@ class FileCabinet(types.FileCabinetP):
     def dialog(self, key: str, *, required: Literal[True]) -> types.DialogP: ...
 
     @overload
-    def dialog(self, key: str, *, required: Literal[False]) -> Optional[types.DialogP]: ...
+    def dialog(
+        self, key: str, *, required: Literal[False]
+    ) -> Optional[types.DialogP]: ...
 
     def dialog(self, key: str, *, required: bool = False) -> Optional[types.DialogP]:
         return structs.first_item_by_id_or_name(self.dialogs, key, required=required)
 
     @overload
-    def search_dialog(self, key: Optional[str], *, required: Literal[True]) -> types.SearchDialogP: ...
+    @overload
+    def search_dialog(
+        self, key: Optional[str] = None, *, required: Literal[True]
+    ) -> types.SearchDialogP: ...
 
     @overload
-    def search_dialog(self, key: Optional[str], *, required: Literal[False]) -> Optional[types.SearchDialogP]: ...
+    def search_dialog(
+        self, key: Optional[str] = None, *, required: Literal[False] = False
+    ) -> Optional[types.SearchDialogP]: ...
 
-    def search_dialog(self, key: Optional[str] = None, *, required: bool = False) -> Optional[types.SearchDialogP]:
+    def search_dialog(
+        self, key: Optional[str] = None, *, required: bool = False
+    ) -> Optional[types.SearchDialogP]:
         # TODO: Is there a default search dialog?
-        search_dlgs = (dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog))
+        search_dlgs = (
+            dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog)
+        )
         if key:
             return structs.first_item_by_id_or_name(
                 search_dlgs,
@@ -52,9 +69,7 @@ class FileCabinet(types.FileCabinetP):
             )
         else:
             return structs.first_item_by_class(
-                search_dlgs,
-                dialogs.SearchDialog,
-                required=required
+                search_dlgs, dialogs.SearchDialog, required=required
             )
 
     # This method from PR#4 needs a complete rewrite
@@ -86,21 +101,23 @@ class FileCabinet(types.FileCabinetP):
 
         xml_payload = xml_head + xml_middle + xml_foot
 
-        headers = {
-            "Content-Type": "application/xml",
-            "Accept": "application/xml"
-        }
+        headers = {"Content-Type": "application/xml", "Accept": "application/xml"}
 
         try:
-            result = self.organization.client.conn.post_text(f"{self.endpoints['documents']}", headers=headers,
-                                                             data=str.encode(xml_payload))
+            result = self.organization.client.conn.post_text(
+                f"{self.endpoints['documents']}",
+                headers=headers,
+                data=str.encode(xml_payload),
+            )
         except Exception as e:
             log.debug(f"Problem creating data entry:\n\n{e}")
             return False
         return result
 
     # This method from PR#4 needs a complete rewrite
-    def update_data_entry(self, query: List = [], data: Dict = {}) -> Union[Response, Literal[False]]:
+    def update_data_entry(
+        self, query: List = [], data: Dict = {}
+    ) -> Union[Response, Literal[False]]:
         """
         The `update_data_entry` function updates the fields of a document in a file cabinet based on a
         search query and a dictionary of field-value pairs.
@@ -119,7 +136,7 @@ class FileCabinet(types.FileCabinetP):
 
         fc_fields = []
         # Retrieve and extract file cabinet fields and types
-        dlg = self.search_dialog()
+        dlg = self.search_dialog(required=True)
         for field in dlg.fields.values():
             fc_field: Dict[str, Any] = {}
             fc_field["id"] = field.id
@@ -134,27 +151,29 @@ class FileCabinet(types.FileCabinetP):
         # more than one result, it logs a debug message and returns False, indicating that the update
         # request can only be executed for one document and the user needs to specify their search
         # query.
-        dlg = self.search_dialog()
+        dlg = self.search_dialog(required=True)
         fc_search = dlg.search(query)
+        document_id: Optional[str] = None
         if fc_search.count == 1:
             for result in fc_search:
                 document_id = result.document.id
+            if not document_id:
+                log.debug("Document ID not found in result")
+                return False
         elif fc_search.count < 1:
-            log.debug('Update search query returned no results, update request will not be executed.')
+            log.debug(
+                "Update search query returned no results, update request will not be executed."
+            )
             return False
         else:
             log.debug(
-                'Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query.')
+                "Update search query returned more than 1 result, update request can only be executed for one document. Please specify your search query."
+            )
             return False
 
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
+        headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
-        body = {
-            "Field": []
-        }
+        body = {"Field": []}
 
         # The above code is iterating over the items in the `data` dictionary. For each key-value
         # pair, it creates a list called `item_element_name` using a list comprehension.
@@ -165,12 +184,15 @@ class FileCabinet(types.FileCabinetP):
             # `item_element_name` is set to 'Float'. If not, it checks if the value of the `type` key
             # is equal to 'Numeric'. If it is, the corresponding element in `item_element_name` is set
             # to 'Integer'. If neither condition is met, the corresponding element
-            item_element_name = ['Decimal' if x['type'] == 'Decimal' else 'String' for x in fc_fields if
-                                 x['id'] == key.upper()]
+            item_element_name = [
+                "Decimal" if x["type"] == "Decimal" else "String"
+                for x in fc_fields
+                if x["id"] == key.upper()
+            ]
             field = {
                 "FieldName": key,
                 "Item": value,
-                "ItemElementName": item_element_name[0]
+                "ItemElementName": item_element_name[0],
             }
             body["Field"].append(field)
 
@@ -178,10 +200,11 @@ class FileCabinet(types.FileCabinetP):
             # result = self.client.conn.put(f"{self.endpoints['filecabinets']}/{fc.id}/Documents/{document_id}/Fields", headers=headers, json=body)
             result = self.organization.client.conn.put(
                 f"{self.endpoints['documents']}/{document_id}/Fields",
-                headers=headers, json=body
+                headers=headers,
+                json=body,
             )
         except Exception as e:
-            log.debug(f'Error updating document data fields:\n\n{e}')
+            log.debug(f"Error updating document data fields:\n\n{e}")
             return False
         return result
 

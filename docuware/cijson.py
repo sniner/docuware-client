@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import json
+from typing import Any
 
 from docuware import cidict
 
@@ -34,5 +36,6 @@ def dump(*args, **kwargs):
 
 def dumps(*args, **kwargs):
     return json.dumps(*args, **kwargs, cls=CIJSONEncoder)
+
 
 # vim: set et sw=4 ts=4:

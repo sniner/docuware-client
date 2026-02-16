@@ -1,11 +1,11 @@
 import argparse
 import json
-import logging
 import pathlib
 import sys
 from typing import Optional
 
 import docuware
+from docuware import types
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -15,24 +15,20 @@ def parse_arguments() -> argparse.Namespace:
         return arg.casefold()
 
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=__doc__)
+        formatter_class=argparse.RawDescriptionHelpFormatter, description=__doc__
+    )
 
     parser.add_argument(
         "--config-dir",
         type=pathlib.Path,
         default=".",
-        help="Directory for configuration files (default: current directory)"
+        help="Directory for configuration files (default: current directory)",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Output more messages"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Output more messages")
     parser.add_argument(
         "--ignore-certificate",
         action="store_true",
-        help="Do not verify certificate integrity"
+        help="Do not verify certificate integrity",
     )
 
     subparsers = parser.add_subparsers(dest="subcommand")
@@ -43,87 +39,68 @@ def parse_arguments() -> argparse.Namespace:
     login_parser.add_argument(
         "--cookie-auth",
         action="store_true",
-        help="Authenticate with session cookie instead of OAuth2"
+        help="Authenticate with session cookie instead of OAuth2",
     )
     login_parser.add_argument(
         "--url",
         type=case_insensitive_string_opt,
         required=True,
-        help="URL of DocuWare server"
+        help="URL of DocuWare server",
     )
+    login_parser.add_argument("--username", type=str, required=True, help="Username")
+    login_parser.add_argument("--password", type=str, required=True, help="Password")
     login_parser.add_argument(
-        "--username",
-        type=str,
-        required=True,
-        help="Username"
-    )
-    login_parser.add_argument(
-        "--password",
-        type=str,
-        required=True,
-        help="Password"
-    )
-    login_parser.add_argument(
-        "--organization",
-        type=str,
-        default=None,
-        help="Organization"
+        "--organization", type=str, default=None, help="Organization"
     )
 
-    list_parser = subparsers.add_parser(
-        "list", description="List all assets"
-    )
+    list_parser = subparsers.add_parser("list", description="List all assets")
     list_parser.add_argument(
         "--file-cabinet",
         type=case_insensitive_string_opt,
         default=None,
-        help="Select a file cabinet by name"
+        help="Select a file cabinet by name",
     )
     list_parser.add_argument(
         "--dialog",
         type=case_insensitive_string_opt,
         default=None,
-        help="Select a dialog by name"
+        help="Select a dialog by name",
     )
     list_parser.add_argument(
         "--field",
         type=case_insensitive_string_opt,
         default=None,
-        help="Select a field by name"
+        help="Select a field by name",
     )
 
-    search_parser = subparsers.add_parser(
-        "search", description="Search for documents"
-    )
+    search_parser = subparsers.add_parser("search", description="Search for documents")
     search_parser.add_argument(
         "--file-cabinet",
         type=case_insensitive_string_opt,
         default=None,
         required=True,
-        help="Select a file cabinet by name"
+        help="Select a file cabinet by name",
     )
     search_parser.add_argument(
         "--download",
         default=None,
         choices=("document", "attachments", "all"),
-        help="Download documents"
+        help="Download documents",
     )
     search_parser.add_argument(
         "--annotations",
         action="store_true",
-        help="Preserve annotations on downloaded documents"
+        help="Preserve annotations on downloaded documents",
     )
     search_parser.add_argument(
-        "conditions",
-        nargs="*",
-        help="Search terms: FIELDNAME=VALUE"
+        "conditions", nargs="*", help="Search terms: FIELDNAME=VALUE"
     )
 
     # tasks_parser = subparsers.add_parser(
     #     "tasks", description="Show my tasks"
     # )
 
-    info_parser = subparsers.add_parser(
+    _info_parser = subparsers.add_parser(
         "info", description="Show some information about this DocuWare installation"
     )
 
@@ -162,7 +139,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
         print(indent(1), "Metadata")
         for fld in doc.fields:
             if fld.value is not None:
-                if fld.internal == False or args.verbose:
+                if not fld.internal or args.verbose:
                     print(indent(2), fld)
         print(indent(1), "Attachments")
         for att in doc.attachments:
@@ -227,7 +204,12 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
         print(indent(1), "Administrator:", org.info.get("Administrator"))
         print(indent(1), "Email:", org.info.get("EMail"))
         print(indent(1), "System number:", org.info.get("SystemNumber"))
-        print(indent(1), "Runtime:", org.info.get("RuntimeVersion"), org.info.get("OrganizationType"))
+        print(
+            indent(1),
+            "Runtime:",
+            org.info.get("RuntimeVersion"),
+            org.info.get("OrganizationType"),
+        )
     return 0
 
 
@@ -261,7 +243,7 @@ def main() -> None:
             with open(session_file, "w") as f:
                 json.dump(session, f)
 
-            print(f"Login successful", file=sys.stderr)
+            print("Login successful", file=sys.stderr)
             exit(0)
 
     if not cred_file.exists() or not session_file.exists():
@@ -273,7 +255,10 @@ def main() -> None:
     with open(session_file) as f:
         session = json.load(f)
 
-    dw = docuware.Client(credentials.get("url", "http://localhost"), verify_certificate=not args.ignore_certificate)
+    dw = docuware.Client(
+        credentials.get("url", "http://localhost"),
+        verify_certificate=not args.ignore_certificate,
+    )
     try:
         session = dw.login(
             username=credentials.get("username"),

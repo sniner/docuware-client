@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 from typing import Any, Dict, Type
 
@@ -8,8 +9,11 @@ log = logging.getLogger(__name__)
 
 FieldValueConfigT = Dict[str, Any]
 
+
 class FieldValue(types.FieldValueP):
-    TYPE_TABLE: cidict.CaseInsensitiveDict[Type[FieldValue]] = cidict.CaseInsensitiveDict()
+    TYPE_TABLE: cidict.CaseInsensitiveDict[Type[FieldValue]] = (
+        cidict.CaseInsensitiveDict()
+    )
 
     def __init__(self, config: FieldValueConfigT):
         self.name = config.get("FieldLabel", "")
@@ -55,7 +59,8 @@ class IntFieldValue(FieldValue):
             self.value = None if self.value is None else int(self.value)
         except ValueError:
             raise errors.DataError(
-                f"Value of field '{self.id}' is expected to be of type integer, found '{self.value}'")
+                f"Value of field '{self.id}' is expected to be of type integer, found '{self.value}'"
+            )
 
     def __str__(self) -> str:
         return f"Integer '{self.name}' [{self.id}] = {self.value}"
@@ -67,14 +72,15 @@ class DecimalFieldValue(FieldValue):
         try:
             self.value = None if self.value is None else float(self.value)
         except ValueError:
-            raise errors.DataError(f"Value of field '{self.id}' is expected to be of type float, found '{self.value}'")
+            raise errors.DataError(
+                f"Value of field '{self.id}' is expected to be of type float, found '{self.value}'"
+            )
 
     def __str__(self) -> str:
         return f"Decimal '{self.name}' [{self.id}] = {self.value}"
 
 
 class DateTimeFieldValue(FieldValue):
-
     def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
         if self.value:
@@ -87,11 +93,13 @@ class DateTimeFieldValue(FieldValue):
         return f"{self.content_type} '{self.name}' [{self.id}] = {self.value}"
 
 
-FieldValue.TYPE_TABLE = cidict.CaseInsensitiveDict[Type[FieldValue]]({
-    "Date": DateTimeFieldValue,
-    "DateTime": DateTimeFieldValue,
-    "Int": IntFieldValue,
-    "Decimal": DecimalFieldValue,
-    "String": StringFieldValue,
-    "Keywords": KeywordsFieldValue,
-})
+FieldValue.TYPE_TABLE = cidict.CaseInsensitiveDict[Type[FieldValue]](
+    {
+        "Date": DateTimeFieldValue,
+        "DateTime": DateTimeFieldValue,
+        "Int": IntFieldValue,
+        "Decimal": DecimalFieldValue,
+        "String": StringFieldValue,
+        "Keywords": KeywordsFieldValue,
+    }
+)

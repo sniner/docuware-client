@@ -1,13 +1,12 @@
 from __future__ import annotations
+
 import re
 from typing import (
     Dict,
     Iterable,
     List,
-    Literal,
     Optional,
     Type,
-    TypeVar,
     Union,
     overload,
 )
@@ -15,15 +14,14 @@ from typing import (
 from docuware import cidict, errors, types
 
 
-# ConfigItemT = List[Dict[str, str]]
-# ConfigT = Union[Dict[str, ConfigItemT], cidict.CaseInsensitiveDict[ConfigItemT]]
-
-
 class Endpoints(cidict.CaseInsensitiveDict[str]):
     def __init__(self, config: types.ConfigT):
         super().__init__()
         for link in config.get("Links") or []:
             self[link["rel"]] = link["href"]
+
+
+EMPTY_ENDPOINT_TABLE = Endpoints(config={})
 
 
 class ResourcePattern:
@@ -38,16 +36,24 @@ class ResourcePattern:
             self._fields = re.findall(r"\{(\w+)\}", self.pattern)
         return self._fields
 
-    def apply(self, data: Union[Dict[str, str], cidict.CaseInsensitiveDict[str]], strict: bool = False) -> str:
+    def apply(
+        self,
+        data: Union[Dict[str, str], cidict.CaseInsensitiveDict[str]],
+        strict: bool = False,
+    ) -> str:
         s = self.pattern
         for name, value in data.items():
             s, n = re.subn("\\{" + name + "\\}", value, s, flags=re.IGNORECASE)
             if strict and n <= 0:
-                raise errors.InternalError(f"Key '{name}' not found in pattern '{self.pattern}'")
+                raise errors.InternalError(
+                    f"Key '{name}' not found in pattern '{self.pattern}'"
+                )
         if strict:
             f = re.findall(r"\{(\w+)\}", s)
             if f:
-                raise errors.InternalError(f"Pattern '{self.pattern}' incomplete, missing fields: {', '.join(f)}")
+                raise errors.InternalError(
+                    f"Pattern '{self.pattern}' incomplete, missing fields: {', '.join(f)}"
+                )
         return s
 
     def __lt__(self, other: object):
@@ -67,6 +73,9 @@ class Resources(cidict.CaseInsensitiveDict[ResourcePattern]):
             self[r.name] = r
 
 
+EMPTY_RESOURCE_TABLE = Resources(config={})
+
+
 @overload
 def first_item_by_id_or_name(
     items: Iterable[types.IdNameT],
@@ -76,6 +85,7 @@ def first_item_by_id_or_name(
     required: bool = False,
 ) -> types.IdNameT: ...
 
+
 @overload
 def first_item_by_id_or_name(
     items: Iterable[types.IdNameT],
@@ -84,6 +94,7 @@ def first_item_by_id_or_name(
     default: None = None,
     required: bool = True,
 ) -> types.IdNameT: ...
+
 
 def first_item_by_id_or_name(
     items: Iterable[types.IdNameT],
@@ -111,6 +122,7 @@ def first_item_by_class(
     required: bool = False,
 ) -> types.IdNameT: ...
 
+
 @overload
 def first_item_by_class(
     items: Iterable[types.IdNameT],
@@ -119,6 +131,7 @@ def first_item_by_class(
     default: None = None,
     required: bool = True,
 ) -> types.IdNameT: ...
+
 
 def first_item_by_class(
     items: Iterable[types.IdNameT],
@@ -134,5 +147,6 @@ def first_item_by_class(
         raise KeyError(cls.__name__)
     else:
         return default
+
 
 # vim: set et sw=4 ts=4:
