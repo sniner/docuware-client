@@ -221,7 +221,7 @@ class Group:
     @staticmethod
     def from_response(response: Dict, organization: types.OrganizationP) -> Group:
         g = Group(name=response.get("Name") or "")
-        g.id = response.get("Id") or ""
+        g.id = str(response.get("Id") or "")
         g.endpoints = structs.Endpoints(response)
         g.organization = organization
         return g

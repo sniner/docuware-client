@@ -44,7 +44,7 @@ class Authenticator(ABC, types.AuthenticatorP):
         url = conn.make_url(path)
         resp = conn.session.get(url, headers={**DEFAULT_HEADERS, **JSON_HEADERS})
         if resp.status_code == 200:
-            return json.loads(resp.text, object_hook=conn._json_object_hook)
+            return cijson.loads(resp.text)
         raise errors.ResourceError("Failed to get resource", url=url, status_code=resp.status_code)
 
     def _post(
@@ -58,7 +58,7 @@ class Authenticator(ABC, types.AuthenticatorP):
         headers = {**DEFAULT_HEADERS, **(headers or {}), **JSON_HEADERS}
         resp = conn.session.post(url, headers=headers, data=data)
         if resp.status_code == 200:
-            return json.loads(resp.text, object_hook=conn._json_object_hook)
+            return cijson.loads(resp.text)
         raise errors.ResourceError("Failed to post to resource", url=url, status_code=resp.status_code)
 
 class CookieAuthenticator(Authenticator):
@@ -197,9 +197,7 @@ class Connection(types.ConnectionP):
         self.base_url = base_url
         self.session = httpx.Client(verify=verify_certificate)
         self.authenticator = authenticator
-        self._json_object_hook = (
-            cijson.case_insensitive_hook if case_insensitive else None
-        )
+        self._case_insensitive = case_insensitive
 
     def make_path(self, path: str, query: Dict[str, str]) -> str:
         u = urlparse.urlsplit(path)
@@ -259,7 +257,8 @@ class Connection(types.ConnectionP):
         data: Optional[Any] = None,
     ) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
-        return json.loads(self.post(path, headers=headers, json=json, data=data).text, object_hook=self._json_object_hook)
+        resp = self.post(path, headers=headers, json=json, data=data)
+        return cijson.loads(resp.text) if self._case_insensitive else json.loads(resp.text)
 
     def post_text(
         self,
@@ -302,8 +301,8 @@ class Connection(types.ConnectionP):
         data: Optional[Any] = None,
     ) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
-        return json.loads(self.put(path, headers=headers, params=params, json=json, data=data).text,
-                          object_hook=self._json_object_hook)
+        resp = self.put(path, headers=headers, params=params, json=json, data=data)
+        return cijson.loads(resp.text) if self._case_insensitive else json.loads(resp.text)
 
     def put_text(
         self,
@@ -338,7 +337,8 @@ class Connection(types.ConnectionP):
 
     def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
-        return json.loads(self.get(path, headers=headers).text, object_hook=self._json_object_hook)
+        resp = self.get(path, headers=headers)
+        return cijson.loads(resp.text) if self._case_insensitive else json.loads(resp.text)
 
     def get_text(self, path: str, headers: Optional[Dict[str, str]] = None) -> str:
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS

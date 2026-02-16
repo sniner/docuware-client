@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Literal, Optional, Union, overload
 
-from requests.models import Response
+import httpx
 
 from docuware import dialogs, structs, types
 
