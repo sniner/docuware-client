@@ -120,6 +120,7 @@ class ConnectionP(Protocol):
 
 class DocuwareClientP(Protocol):
     conn: ConnectionP
+    version: Optional[str]
 
     @property
     def organizations(self) -> Generator[OrganizationP, None, None]: ...
