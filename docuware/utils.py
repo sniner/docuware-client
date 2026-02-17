@@ -42,9 +42,7 @@ def datetime_from_string(
             else:
                 # WTF: negative timestamps ... ?!
                 return None
-        raise errors.DataError(
-            f"Value must be formatted like '/Date(...)/', found '{value}'"
-        )
+        raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
     else:
         return None
 
@@ -69,9 +67,7 @@ def date_from_string(value: str) -> Optional[date]:
                 return dt
             else:
                 return None
-        raise errors.DataError(
-            f"Value must be formatted like '/Date(...)/', found '{value}'"
-        )
+        raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
     else:
         return None
 
@@ -99,9 +95,7 @@ def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
     while candidate.exists():
         n += 1
         if n > 1000:
-            raise errors.InternalError(
-                f"Unable to create file {path}: too many duplicates"
-            )
+            raise errors.InternalError(f"Unable to create file {path}: too many duplicates")
         candidate = pathlib.Path(f"{stem}({n}){suffix}")
     return candidate
 

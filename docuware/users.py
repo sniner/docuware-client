@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any, Dict, Generator, Optional
 
-import requests
+import httpx
 
 from . import errors, structs, types, utils
 
@@ -83,10 +83,7 @@ class User:
     def groups(self) -> Generator[Group, None, None]:
         if self.organization and self.endpoints:
             result = self.organization.client.conn.get_json(self.endpoints["groups"])
-            return (
-                Group.from_response(g, self.organization)
-                for g in result.get("Item", [])
-            )
+            return (Group.from_response(g, self.organization) for g in result.get("Item", []))
         else:
             return (Group("") for _ in [])
 
@@ -145,7 +142,7 @@ class User:
                 _result = self.organization.conn.post_json(
                     self.organization.endpoints["userInfo"], json=body
                 )
-            except requests.RequestException as exc:
+            except httpx.HTTPError as exc:
                 raise errors.UserOrGroupError(
                     f"Unable to set activation status of user {self}: {exc}"
                 )
@@ -171,25 +168,18 @@ class Users(types.UsersP):
 
     def __iter__(self) -> Generator[types.UserP, None, None]:
         result = self.organization.conn.get_json(self.organization.endpoints["users"])
-        return (
-            User.from_response(user, self.organization)
-            for user in result.get("User", [])
-        )
+        return (User.from_response(user, self.organization) for user in result.get("User", []))
 
     def __getitem__(self, key: str) -> types.UserP:
         return structs.first_item_by_id_or_name(self, key)
 
-    def get(
-        self, key: str, default: Optional[types.UserP] = None
-    ) -> Optional[types.UserP]:
+    def get(self, key: str, default: Optional[types.UserP] = None) -> Optional[types.UserP]:
         try:
             return self.__getitem__(key)
         except KeyError:
             return default
 
-    def add(
-        self, user: types.UserP, password: Optional[str] = None
-    ) -> Optional[types.UserP]:
+    def add(self, user: types.UserP, password: Optional[str] = None) -> Optional[types.UserP]:
         headers = {
             "Content-Type": "application/vnd.docuware.platform.createorganizationuser+json"
         }
@@ -214,8 +204,6 @@ class Users(types.UsersP):
 
 
 class Group:
-
-
     def __init__(self, name: str):
         self.name = name
         self.id: str = ""
@@ -225,7 +213,7 @@ class Group:
     @staticmethod
     def from_response(response: Dict, organization: types.OrganizationP) -> Group:
         g = Group(name=response.get("Name") or "")
-        g.id = response.get("Id") or ""
+        g.id = str(response.get("Id") or "")
         g.endpoints = structs.Endpoints(response)
         g.organization = organization
         return g
@@ -235,9 +223,7 @@ class Group:
         if not self.organization or not self.endpoints:
             return (User("") for _ in [])
         result = self.organization.client.conn.get_json(self.endpoints["users"])
-        return (
-            User.from_response(u, self.organization) for u in result.get("User", [])
-        )
+        return (User.from_response(u, self.organization) for u in result.get("User", []))
 
     # FIXME: Testing needed, the endpoint looks very suspicious
     def _set_user_membership(self, user: types.UserP, include: bool) -> bool:
@@ -285,20 +271,15 @@ class Groups:
         self.organization = organization
 
     def __iter__(self) -> Generator[types.GroupP, None, None]:
-        result = self.organization.client.conn.get_json(
-            self.organization.endpoints["groups"]
-        )
+        result = self.organization.client.conn.get_json(self.organization.endpoints["groups"])
         return (
-            Group.from_response(group, self.organization)
-            for group in result.get("Item", [])
+            Group.from_response(group, self.organization) for group in result.get("Item", [])
         )
 
     def __getitem__(self, key: str) -> types.GroupP:
         return structs.first_item_by_id_or_name(self, key)
 
-    def get(
-        self, key: str, default: Optional[types.GroupP] = None
-    ) -> Optional[types.GroupP]:
+    def get(self, key: str, default: Optional[types.GroupP] = None) -> Optional[types.GroupP]:
         try:
             return self.__getitem__(key)
         except KeyError:

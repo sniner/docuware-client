@@ -33,9 +33,7 @@ def parse_arguments() -> argparse.Namespace:
 
     subparsers = parser.add_subparsers(dest="subcommand")
 
-    login_parser = subparsers.add_parser(
-        "login", description="Connect to DocuWare server"
-    )
+    login_parser = subparsers.add_parser("login", description="Connect to DocuWare server")
     login_parser.add_argument(
         "--cookie-auth",
         action="store_true",
@@ -49,9 +47,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     login_parser.add_argument("--username", type=str, required=True, help="Username")
     login_parser.add_argument("--password", type=str, required=True, help="Password")
-    login_parser.add_argument(
-        "--organization", type=str, default=None, help="Organization"
-    )
+    login_parser.add_argument("--organization", type=str, default=None, help="Organization")
 
     list_parser = subparsers.add_parser("list", description="List all assets")
     list_parser.add_argument(
@@ -92,9 +88,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Preserve annotations on downloaded documents",
     )
-    search_parser.add_argument(
-        "conditions", nargs="*", help="Search terms: FIELDNAME=VALUE"
-    )
+    search_parser.add_argument("conditions", nargs="*", help="Search terms: FIELDNAME=VALUE")
 
     # tasks_parser = subparsers.add_parser(
     #     "tasks", description="Show my tasks"

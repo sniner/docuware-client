@@ -9,8 +9,6 @@ log = logging.getLogger(__name__)
 
 
 class Organization:
-
-
     def __init__(self, config: Dict, client: types.DocuwareClientP):
         self.client = client
         self.name = config.get("Name", "")
@@ -26,26 +24,18 @@ class Organization:
     @property
     def file_cabinets(self) -> Generator[types.FileCabinetP, None, None]:
         result = self.client.conn.get_json(self.endpoints["filecabinets"])
-        return (
-            filecabinet.FileCabinet(fc, self) for fc in result.get("FileCabinet", [])
-        )
+        return (filecabinet.FileCabinet(fc, self) for fc in result.get("FileCabinet", []))
+
+    @overload
+    def file_cabinet(self, key: str, *, required: Literal[True]) -> types.FileCabinetP: ...
 
     @overload
     def file_cabinet(
-        self, key: str, *, required: Literal[True]
-    ) -> types.FileCabinetP: ...
-
-    @overload
-    def file_cabinet(
-        self, key: str, *, required: Literal[False]
+        self, key: str, *, required: Literal[False] = False
     ) -> Optional[types.FileCabinetP]: ...
 
-    def file_cabinet(
-        self, key: str, *, required: bool = False
-    ) -> Optional[types.FileCabinetP]:
-        return structs.first_item_by_id_or_name(
-            self.file_cabinets, key, required=required
-        )
+    def file_cabinet(self, key: str, *, required: bool = False) -> Optional[types.FileCabinetP]:
+        return structs.first_item_by_id_or_name(self.file_cabinets, key, required=required)
 
     @property
     def my_tasks(self) -> Sequence:
@@ -63,8 +53,7 @@ class Organization:
             self._dialogs = [
                 dialogs.Dialog.from_config(dlg, fc_by_id[dlg.get("FileCabinetId")])
                 for dlg in result.get("Dialog", [])
-                if dlg.get("$type") == "DialogInfo"
-                and dlg.get("FileCabinetId") in fc_by_id
+                if dlg.get("$type") == "DialogInfo" and dlg.get("FileCabinetId") in fc_by_id
             ]
         return self._dialogs or []
 
@@ -81,9 +70,7 @@ class Organization:
             self._info["CompanyNames"] = [
                 line for line in self._info["CompanyNames"] if line
             ] or [self.name]
-            self._info["AddressLines"] = [
-                line for line in self._info["AddressLines"] if line
-            ]
+            self._info["AddressLines"] = [line for line in self._info["AddressLines"] if line]
         return self._info
 
     @property

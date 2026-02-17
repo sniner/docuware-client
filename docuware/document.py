@@ -18,20 +18,14 @@ class Document:
         self.modified = utils.datetime_from_string(config.get("LastModified"))
         self.created = utils.datetime_from_string(config.get("CreatedAt"))
         self.endpoints = structs.Endpoints(config)
-        self.attachments = [
-            DocumentAttachment(s, self) for s in config.get("Sections", [])
-        ]
-        self.fields = [
-            fields.FieldValue.from_config(f) for f in config.get("Fields", [])
-        ]
+        self.attachments = [DocumentAttachment(s, self) for s in config.get("Sections", [])]
+        self.fields = [fields.FieldValue.from_config(f) for f in config.get("Fields", [])]
 
     @property
     def client(self) -> types.DocuwareClientP:
         return self.file_cabinet.organization.client
 
-    def field(
-        self, key: str, default: Optional[Any] = None
-    ) -> Optional[fields.FieldValue]:
+    def field(self, key: str, default: Optional[Any] = None) -> Optional[fields.FieldValue]:
         return structs.first_item_by_id_or_name(self.fields, key, default=default)
 
     @staticmethod
@@ -40,7 +34,7 @@ class Document:
     ) -> Tuple[bytes, str, str]:
         return client.conn.get_bytes(
             endpoint,
-            data={
+            params={
                 "keepAnnotations": "true" if keep_annotations else "false",
                 "targetFileType": "PDF" if keep_annotations else "Auto",
             },

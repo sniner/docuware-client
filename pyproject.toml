@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "docuware-client"
-version = "0.5.5"
+version = "0.6.0"
 description = "DocuWare REST-API client"
 authors = ["Stefan Schönberger <mail@sniner.dev>"]
 readme = "README.md"
@@ -15,7 +15,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = ">=3.9"
-requests = "^2.32.3"
+httpx = {extras = ["http2"], version = "^0.28.1"}
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.3.1"
@@ -30,6 +30,13 @@ typeCheckingMode = "standard"
 useLibraryCodeForTypes = true
 venvPath = "."
 venv = ".venv"
+
+[tool.ruff]
+line-length = 96
+ignore = ["E402"]
+
+[tool.ruff.lint]
+per-file-ignores = { "__init__.py" = ["F401"] }
 
 [build-system]
 requires = ["poetry-core"]

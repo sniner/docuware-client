@@ -1,19 +1,14 @@
 from __future__ import annotations
 
+import json as stdjson
 import logging
 import urllib.parse as urlparse
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple
 
-import requests
-from requests.models import Response
-from urllib3 import disable_warnings
-from urllib3.exceptions import InsecureRequestWarning
+import httpx
 
 from docuware import cijson, errors, parser, types
-
-disable_warnings(InsecureRequestWarning)
-
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +28,7 @@ TEXT_HEADERS = {
 
 class Authenticator(ABC, types.AuthenticatorP):
     @abstractmethod
-    def authenticate(self, conn: types.ConnectionP) -> requests.Session: ...
+    def authenticate(self, conn: types.ConnectionP) -> httpx.Client: ...
 
     @abstractmethod
     def login(self, conn: types.ConnectionP) -> Dict: ...
@@ -45,7 +40,7 @@ class Authenticator(ABC, types.AuthenticatorP):
         url = conn.make_url(path)
         resp = conn.session.get(url, headers={**DEFAULT_HEADERS, **JSON_HEADERS})
         if resp.status_code == 200:
-            return resp.json(object_hook=conn._json_object_hook)
+            return cijson.loads(resp.text)
         raise errors.ResourceError(
             "Failed to get resource", url=url, status_code=resp.status_code
         )
@@ -61,7 +56,7 @@ class Authenticator(ABC, types.AuthenticatorP):
         headers = {**DEFAULT_HEADERS, **(headers or {}), **JSON_HEADERS}
         resp = conn.session.post(url, headers=headers, data=data)
         if resp.status_code == 200:
-            return resp.json(object_hook=conn._json_object_hook)
+            return cijson.loads(resp.text)
         raise errors.ResourceError(
             "Failed to post to resource", url=url, status_code=resp.status_code
         )
@@ -82,7 +77,7 @@ class CookieAuthenticator(Authenticator):
         self.result: Optional[Dict] = None
         self._warn = True
 
-    def authenticate(self, conn: types.ConnectionP) -> requests.Session:
+    def authenticate(self, conn: types.ConnectionP) -> httpx.Client:
         if self.cookies:
             log.debug("Authenticating with cookies")
             conn.session.cookies.update(self.cookies)
@@ -111,7 +106,7 @@ class CookieAuthenticator(Authenticator):
 
         try:
             self.result = self._post(conn, endpoint, headers=headers, data=data)
-            self.cookies = requests.utils.dict_from_cookiejar(conn.session.cookies)
+            self.cookies = dict(conn.session.cookies)
             return self.cookies
         except errors.ResourceError as exc:
             raise errors.AccountError(f"Log in failed with code {exc.status_code}")
@@ -134,9 +129,7 @@ class OAuth2Authenticator(Authenticator):
         self.token = (saved_state or {}).get("access_token")
         self.result: Dict = {}
 
-    def _apply_access_token(
-        self, conn: types.ConnectionP, token: Optional[str]
-    ) -> None:
+    def _apply_access_token(self, conn: types.ConnectionP, token: Optional[str]) -> None:
         if token:
             conn.session.headers.update({"Authorization": f"Bearer {token}"})
         else:
@@ -172,7 +165,7 @@ class OAuth2Authenticator(Authenticator):
             log.warning("Failed to get access token (%s)", exc.status_code)
         return None
 
-    def authenticate(self, conn: types.ConnectionP) -> requests.Session:
+    def authenticate(self, conn: types.ConnectionP) -> httpx.Client:
         self.token = self._get_access_token(conn)
         self._apply_access_token(conn, self.token)
         return conn.session
@@ -201,21 +194,15 @@ class Connection(types.ConnectionP):
         authenticator: Optional[types.AuthenticatorP] = None,
     ):
         self.base_url = base_url
-        self.session = requests.Session()
-        self.session.verify = verify_certificate
+        self.session = httpx.Client(verify=verify_certificate)
         self.authenticator = authenticator
-        self._json_object_hook = (
-            cijson.case_insensitive_hook if case_insensitive else None
-        )
+        self._case_insensitive = case_insensitive
 
     def make_path(self, path: str, query: Dict[str, str]) -> str:
         u = urlparse.urlsplit(path)
         q = "&".join(
             ([u.query] if u.query else [])
-            + [
-                f"{urlparse.quote_plus(k)}={urlparse.quote_plus(v)}"
-                for k, v in query.items()
-            ]
+            + [f"{urlparse.quote_plus(k)}={urlparse.quote_plus(v)}" for k, v in query.items()]
         )
         return urlparse.urlunsplit(u._replace(query=q))
 
@@ -230,12 +217,16 @@ class Connection(types.ConnectionP):
         headers: Optional[Dict[str, str]] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
-    ) -> Response:
+    ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        resp = self.session.post(url, headers=headers, json=json, data=data)
+        content = data if isinstance(data, (bytes, str)) else None
+        data = data if isinstance(data, dict) else None
+        resp = self.session.post(url, headers=headers, json=json, data=data, content=content)
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
-            resp = self.session.post(url, headers=headers, json=json, data=data)
+            resp = self.session.post(
+                url, headers=headers, json=json, data=data, content=content
+            )
         return resp
 
     def post(
@@ -244,7 +235,7 @@ class Connection(types.ConnectionP):
         headers: Optional[Dict[str, str]] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
-    ) -> Response:
+    ) -> httpx.Response:
         url = self.make_url(path)
         resp = self._post(url, headers=headers, json=json, data=data)
         if resp.status_code == 200:
@@ -264,9 +255,8 @@ class Connection(types.ConnectionP):
         data: Optional[Any] = None,
     ) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
-        return self.post(path, headers=headers, json=json, data=data).json(
-            object_hook=self._json_object_hook
-        )
+        resp = self.post(path, headers=headers, json=json, data=data)
+        return cijson.loads(resp.text) if self._case_insensitive else stdjson.loads(resp.text)
 
     def post_text(
         self,
@@ -285,15 +275,22 @@ class Connection(types.ConnectionP):
         params: Optional[Any] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
-    ) -> Response:
+    ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
+        content = data if isinstance(data, (bytes, str)) else None
+        data = data if isinstance(data, dict) else None
         resp = self.session.put(
-            url, headers=headers, params=params, json=json, data=data
+            url, headers=headers, params=params, json=json, data=data, content=content
         )
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
             resp = self.session.put(
-                url, headers=headers, params=params, json=json, data=data
+                url,
+                headers=headers,
+                params=params,
+                json=json,
+                data=data,
+                content=content,
             )
         return resp
 
@@ -304,7 +301,7 @@ class Connection(types.ConnectionP):
         params: Optional[Any] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
-    ) -> Response:
+    ) -> httpx.Response:
         url = self.make_url(path)
         resp = self._put(url, headers=headers, params=params, json=json, data=data)
         if resp.status_code == 200:
@@ -325,9 +322,8 @@ class Connection(types.ConnectionP):
         data: Optional[Any] = None,
     ) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
-        return self.put(
-            path, headers=headers, params=params, json=json, data=data
-        ).json(object_hook=self._json_object_hook)
+        resp = self.put(path, headers=headers, params=params, json=json, data=data)
+        return cijson.loads(resp.text) if self._case_insensitive else stdjson.loads(resp.text)
 
     def put_text(
         self,
@@ -344,23 +340,23 @@ class Connection(types.ConnectionP):
         self,
         url: str,
         headers: Optional[Dict[str, str]] = None,
-        data: Optional[Any] = None,
-    ) -> Response:
+        params: Optional[Any] = None,
+    ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        resp = self.session.get(url, headers=headers, data=data)
+        resp = self.session.get(url, headers=headers, params=params)
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
-            resp = self.session.get(url, headers=headers, data=data)
+            resp = self.session.get(url, headers=headers, params=params)
         return resp
 
     def get(
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        data: Optional[Any] = None,
-    ) -> Response:
+        params: Optional[Any] = None,
+    ) -> httpx.Response:
         url = self.make_url(path)
-        resp = self._get(url, headers=headers, data=data)
+        resp = self._get(url, headers=headers, params=params)
         if resp.status_code == 200:
             return resp
         else:
@@ -372,7 +368,8 @@ class Connection(types.ConnectionP):
 
     def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any:
         headers = {**headers, **JSON_HEADERS} if headers else JSON_HEADERS
-        return self.get(path, headers=headers).json(object_hook=self._json_object_hook)
+        resp = self.get(path, headers=headers)
+        return cijson.loads(resp.text) if self._case_insensitive else stdjson.loads(resp.text)
 
     def get_text(self, path: str, headers: Optional[Dict[str, str]] = None) -> str:
         headers = {**headers, **TEXT_HEADERS} if headers else TEXT_HEADERS
@@ -383,23 +380,22 @@ class Connection(types.ConnectionP):
         url: str,
         headers: Optional[Dict[str, str]] = None,
         params: Optional[Any] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None,
-    ) -> Response:
+    ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
-        resp = self.session.delete(
-            url, headers=headers, params=params, json=json, data=data
-        )
+        resp = self.session.delete(url, headers=headers, params=params)
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
-            resp = self.session.delete(
-                url, headers=headers, params=params, json=json, data=data
-            )
+            resp = self.session.delete(url, headers=headers, params=params)
         return resp
 
-    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> Response:
+    def delete(
+        self,
+        path: str,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[Any] = None,
+    ) -> httpx.Response:
         url = self.make_url(path)
-        resp = self._delete(url, headers=headers)
+        resp = self._delete(url, headers=headers, params=params)
         if resp.status_code == 200:
             return resp
         else:
@@ -410,11 +406,11 @@ class Connection(types.ConnectionP):
             )
 
     def get_bytes(
-        self, path: str, mime_type: Optional[str] = None, data: Optional[Any] = None
+        self, path: str, mime_type: Optional[str] = None, params: Optional[Any] = None
     ) -> Tuple[bytes, str, str]:
         url = self.make_url(path)
         resp = self._get(
-            url, headers={"Accept": mime_type if mime_type else "*/*"}, data=data
+            url, headers={"Accept": mime_type if mime_type else "*/*"}, params=params
         )
         if resp.status_code == 200:
             content_type = resp.headers.get("Content-Type", "application/octet-stream")
