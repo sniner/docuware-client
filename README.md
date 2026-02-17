@@ -14,6 +14,11 @@ in progress, may yield unexpected results, and almost certainly contains bugs.
 > has been available since DocuWare 7.10, and
 > [cookie authentication will be discontinued](https://start.docuware.com/blog/product-news/docuware-sdk-discontinuation-of-cookie-authentication)
 > with DocuWare 7.11.
+>
+> ⚠️ Introduced in version 0.6.0, `httpx` is used instead of `requests`. The API
+> should be largely compatible, but if you rely on specific `requests` behavior,
+> implementation details or `requests` structures (like `Session`), please stay
+> on version 0.5.x.
 
 
 ## Usage
@@ -47,6 +52,14 @@ dw = docuware.Client("http://localhost")
 session = dw.login("username", "password", "organization", saved_session=session)
 with open(session_file, "w") as f:
     json.dump(session, f)
+```
+
+Or simpler, using the `connect` function which handles sessions and credentials automatically:
+
+```python
+# Tries to find credentials in arguments, environment variables DW_USERNAME, DW_PASSWORD,
+# DW_ORG or .credentials file
+dw = docuware.connect(url="http://localhost", username="...", password="...")
 ```
 
 Iterate over the organizations and file cabinets:

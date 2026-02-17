@@ -64,9 +64,7 @@ class CaseInsensitiveDict(MutableMapping[str, VT], Generic[VT]):
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, CaseInsensitiveDict):
             return NotImplemented
-        return dict(self.case_insensitive_items()) == dict(
-            other.case_insensitive_items()
-        )
+        return dict(self.case_insensitive_items()) == dict(other.case_insensitive_items())
 
     @overload
     def get(self, key: str) -> Optional[VT]: ...

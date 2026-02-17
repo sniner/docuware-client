@@ -14,8 +14,6 @@ OR = "Or"
 
 
 class Dialog:
-
-
     def __init__(self, config: Dict, file_cabinet: types.FileCabinetP):
         self.file_cabinet = file_cabinet
         self.client = file_cabinet.organization.client
@@ -62,8 +60,7 @@ class TaskListDialog(Dialog):
         if self._fields is None:
             config = self.client.conn.get_json(self.endpoints["self"])
             self._fields = {
-                f.id: f
-                for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
+                f.id: f for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
             }
 
     @property
@@ -81,8 +78,7 @@ class SearchDialog(Dialog):
         if self._fields is None:
             config = self.client.conn.get_json(self.endpoints["self"])
             self._fields = {
-                f.id: f
-                for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
+                f.id: f for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
             }
             # NB: SearchQuery depends on self.fields
             self._query = SearchQuery(config.get("Query", {}), self)
@@ -100,9 +96,6 @@ class SearchDialog(Dialog):
 
 
 class SearchField:
-
-
-
     def __init__(self, config: Dict, dialog: Dialog):
         self.dialog = dialog
         self.id: str = config.get("DBFieldName", "")
@@ -113,9 +106,7 @@ class SearchField:
 
     def values(self) -> List[Any]:
         if "simpleSelectList" in self.endpoints:
-            result = self.dialog.client.conn.get_json(
-                self.endpoints["simpleSelectList"]
-            )
+            result = self.dialog.client.conn.get_json(self.endpoints["simpleSelectList"])
             return result.get("Value", [])
         return []
 
@@ -269,9 +260,7 @@ class SearchResult:
 class SearchResultItem:
     def __init__(self, config: Dict, result: SearchResult):
         self.result = result
-        self.fields = [
-            fields.FieldValue.from_config(f) for f in config.get("Fields", [])
-        ]
+        self.fields = [fields.FieldValue.from_config(f) for f in config.get("Fields", [])]
         self.content_type = config.get("ContentType")
         self.title = config.get("Title")
         self.file_cabinet_id = config.get("FileCabinetId")
@@ -287,9 +276,7 @@ class SearchResultItem:
         if self._document is None:
             dw = self.result.query.dialog.client
             config = dw.conn.get_json(self.endpoints["self"])
-            self._document = document.Document(
-                config, self.result.query.dialog.file_cabinet
-            )
+            self._document = document.Document(config, self.result.query.dialog.file_cabinet)
         return self._document
 
     def __str__(self) -> str:

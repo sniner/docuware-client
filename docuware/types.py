@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import (
     Any,
-    Callable,
     Dict,
     Generator,
     Iterator,
@@ -17,9 +16,10 @@ from typing import (
     overload,
 )
 
+import httpx
+
 from docuware import cidict
 
-import httpx
 
 class IdP(Protocol):
     @property
@@ -49,7 +49,7 @@ class AuthenticatorP(Protocol):
 class ConnectionP(Protocol):
     authenticator: Optional[AuthenticatorP]
     session: httpx.Client
-    _json_object_hook: Optional[Callable[[object], object]]
+    base_url: str
 
     def make_path(self, path: str, query: Dict[str, str]) -> str: ...
 
@@ -223,13 +223,11 @@ class OrganizationP(IdNameP, Protocol):
     def file_cabinets(self) -> Generator[FileCabinetP, None, None]: ...
 
     @overload
-    def file_cabinet(
-        self, key: str, *, required: Literal[True]
-    ) -> FileCabinetP: ...
+    def file_cabinet(self, key: str, *, required: Literal[True]) -> FileCabinetP: ...
 
     @overload
     def file_cabinet(
-        self, key: str, *, required: Literal[False]
+        self, key: str, *, required: Literal[False] = False
     ) -> Optional[FileCabinetP]: ...
 
     def file_cabinet(
@@ -263,7 +261,7 @@ class FileCabinetP(IdNameP, Protocol):
     def dialog(self, key: str, *, required: Literal[True]) -> DialogP: ...
 
     @overload
-    def dialog(self, key: str, *, required: Literal[False]) -> Optional[DialogP]: ...
+    def dialog(self, key: str, *, required: Literal[False] = False) -> Optional[DialogP]: ...
 
     def dialog(self, key: str, *, required: bool = False) -> Optional[DialogP]: ...
 
@@ -274,7 +272,7 @@ class FileCabinetP(IdNameP, Protocol):
 
     @overload
     def search_dialog(
-        self, key: Optional[str] = None, *, required: Literal[False]
+        self, key: Optional[str] = None, *, required: Literal[False] = False
     ) -> Optional[SearchDialogP]: ...
 
     def search_dialog(
@@ -285,6 +283,7 @@ class FileCabinetP(IdNameP, Protocol):
 class SearchFieldP(IdNameP, Protocol):
     @property
     def dialog(self) -> DialogP: ...
+
     length: int
     type: Optional[str]
 
@@ -323,7 +322,19 @@ class SearchResultItemP(Protocol):
     def thumbnail(self) -> Tuple[bytes, str, str]: ...
 
     @property
+    def title(self) -> Optional[str]: ...
+
+    @property
+    def content_type(self) -> Optional[str]: ...
+
+    @property
+    def file_cabinet_id(self) -> Optional[str]: ...
+
+    @property
     def document(self) -> DocumentP: ...
+
+    @property
+    def fields(self) -> Sequence[FieldValueP]: ...
 
 
 class DocumentP(Protocol):
@@ -333,7 +344,8 @@ class DocumentP(Protocol):
     def id(self, value: Optional[str]) -> None: ...
 
 
-class FieldValueP(IdNameP, Protocol): ...
+class FieldValueP(IdNameP, Protocol):
+    value: Any
 
 
 class MyTasksP(Protocol): ...

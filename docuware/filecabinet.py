@@ -11,8 +11,6 @@ log = logging.getLogger(__name__)
 
 
 class FileCabinet:
-
-
     def __init__(self, config: Dict, organization: types.OrganizationP):
         self.organization = organization
         self.name = config.get("Name", "")
@@ -37,7 +35,7 @@ class FileCabinet:
 
     @overload
     def dialog(
-        self, key: str, *, required: Literal[False]
+        self, key: str, *, required: Literal[False] = False
     ) -> Optional[types.DialogP]: ...
 
     def dialog(self, key: str, *, required: bool = False) -> Optional[types.DialogP]:
@@ -58,9 +56,7 @@ class FileCabinet:
         self, key: Optional[str] = None, *, required: bool = False
     ) -> Optional[types.SearchDialogP]:
         # TODO: Is there a default search dialog?
-        search_dlgs = (
-            dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog)
-        )
+        search_dlgs = (dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog))
         if key:
             return structs.first_item_by_id_or_name(
                 search_dlgs,
@@ -117,7 +113,7 @@ class FileCabinet:
     # This method from PR#4 needs a complete rewrite
     def update_data_entry(
         self, query: List = [], data: Dict = {}
-    ) -> Union[Response, Literal[False]]:
+    ) -> Union[httpx.Response, Literal[False]]:
         """
         The `update_data_entry` function updates the fields of a document in a file cabinet based on a
         search query and a dictionary of field-value pairs.

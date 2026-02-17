@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Type
 
-from docuware import cidict, errors, types, utils
+from docuware import cidict, errors, utils
 
 log = logging.getLogger(__name__)
 
@@ -11,9 +11,7 @@ FieldValueConfigT = Dict[str, Any]
 
 
 class FieldValue:
-    TYPE_TABLE: cidict.CaseInsensitiveDict[Type[FieldValue]] = (
-        cidict.CaseInsensitiveDict()
-    )
+    TYPE_TABLE: cidict.CaseInsensitiveDict[Type[FieldValue]] = cidict.CaseInsensitiveDict()
 
     def __init__(self, config: FieldValueConfigT):
         self.name = str(config.get("FieldLabel") or "")
