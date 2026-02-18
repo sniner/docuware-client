@@ -177,7 +177,8 @@ def indent(n: int) -> str:
 
 
 def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
-    def get_search_dlg(name: str) -> Optional[docuware.SearchDialog]:
+    def get_first_search_dlg(name: str) -> Optional[docuware.SearchDialog]:
+        name = name.casefold()
         for org in dw.organizations:
             for fc in org.file_cabinets:
                 if fc.name.casefold() == name:
@@ -189,7 +190,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     if not args.conditions:
         return 0
 
-    dlg = get_search_dlg(args.file_cabinet)
+    dlg = get_first_search_dlg(args.file_cabinet)
     if dlg is None:
         return 0
 
@@ -197,7 +198,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
 
     for n, item in enumerate(res):
         doc = item.document
-        print(f"[{n + 1}]", doc)
+        print(f"{n + 1}:", doc)
         if args.download in ("document", "all"):
             data, mime, fname = doc.download(keep_annotations=args.annotations)
             saved_path = docuware.write_binary_file(data, fname)
@@ -315,10 +316,11 @@ def parse_fields_arg(args: List[str]) -> Dict[str, Any]:
 
 
 def get_file_cabinet(dw: docuware.Client, name: str) -> Optional[docuware.FileCabinet]:
+    name = name.casefold()
     for org in dw.organizations:
         for fc in org.file_cabinets:
             if fc.name.casefold() == name:
-                # We need to return concrete FileCabinet or verify it is one
+                # TODO: We need to return concrete FileCabinet or verify it is one
                 return fc  # type: ignore
     return None
 
