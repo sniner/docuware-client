@@ -2,7 +2,7 @@ import argparse
 import json
 import pathlib
 import sys
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import docuware
 from docuware import types
@@ -90,6 +90,77 @@ def parse_arguments() -> argparse.Namespace:
     )
     search_parser.add_argument("conditions", nargs="*", help="Search terms: FIELDNAME=VALUE")
 
+    get_parser = subparsers.add_parser("get", description="Get a document by ID")
+    get_parser.add_argument(
+        "--file-cabinet",
+        type=case_insensitive_string_opt,
+        required=True,
+        help="Select a file cabinet by name",
+    )
+    get_parser.add_argument("--id", required=True, help="Document ID")
+    get_parser.add_argument(
+        "--attachment",
+        default=None,
+        help="Download attachment (document, or specific attachment ID)",
+    )
+    get_parser.add_argument(
+        "--output",
+        default=None,
+        type=pathlib.Path,
+        help="Output file or directory for download (defaults to stdout, or filename if directory)",
+    )
+    get_parser.add_argument(
+        "--annotations",
+        action="store_true",
+        help="Preserve annotations on downloaded documents",
+    )
+
+    create_parser = subparsers.add_parser("create", description="Create a new document")
+    create_parser.add_argument(
+        "--file-cabinet",
+        type=case_insensitive_string_opt,
+        required=True,
+        help="Select a file cabinet by name",
+    )
+    create_parser.add_argument(
+        "--file", type=pathlib.Path, required=False, help="File to upload (optional)"
+    )
+    create_parser.add_argument("fields", nargs="*", help="Fields: FIELDNAME=VALUE")
+
+    update_parser = subparsers.add_parser("update", description="Update a document")
+    update_parser.add_argument(
+        "--file-cabinet",
+        type=case_insensitive_string_opt,
+        required=True,
+        help="Select a file cabinet by name",
+    )
+    update_parser.add_argument("--id", required=True, help="Document ID")
+    update_parser.add_argument("fields", nargs="*", help="Fields: FIELDNAME=VALUE")
+
+    attach_parser = subparsers.add_parser("attach", description="Add attachment to document")
+    attach_parser.add_argument(
+        "--file-cabinet",
+        type=case_insensitive_string_opt,
+        required=True,
+        help="Select a file cabinet by name",
+    )
+    attach_parser.add_argument("--id", required=True, help="Document ID")
+    attach_parser.add_argument(
+        "--file", type=pathlib.Path, required=True, help="File to attach"
+    )
+
+    detach_parser = subparsers.add_parser(
+        "detach", description="Remove attachment from document"
+    )
+    detach_parser.add_argument(
+        "--file-cabinet",
+        type=case_insensitive_string_opt,
+        required=True,
+        help="Select a file cabinet by name",
+    )
+    detach_parser.add_argument("--id", required=True, help="Document ID")
+    detach_parser.add_argument("--attachment-id", required=True, help="Attachment ID")
+
     # tasks_parser = subparsers.add_parser(
     #     "tasks", description="Show my tasks"
     # )
@@ -129,7 +200,9 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
         print(f"[{n + 1}]", doc)
         if args.download in ("document", "all"):
             data, mime, fname = doc.download(keep_annotations=args.annotations)
-            docuware.write_binary_file(data, fname)
+            saved_path = docuware.write_binary_file(data, fname)
+            if args.verbose:
+                print(f"Downloaded document: {saved_path}", file=sys.stderr)
         print(indent(1), "Metadata")
         for fld in doc.fields:
             if fld.value is not None:
@@ -140,7 +213,198 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
             print(indent(2), att)
             if args.download in ("attachments", "all"):
                 data, mime, fname = att.download(keep_annotations=args.annotations)
-                docuware.write_binary_file(data, fname)
+                saved_path = docuware.write_binary_file(data, fname)
+                if args.verbose:
+                    print(f"Downloaded attachment: {saved_path}", file=sys.stderr)
+
+
+def get_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
+    fc = get_file_cabinet(dw, args.file_cabinet)
+    if not fc:
+        print(f"File cabinet '{args.file_cabinet}' not found", file=sys.stderr)
+        return 1
+
+    try:
+        doc = fc.get_document(args.id)
+
+        if args.attachment:
+            # Download mode
+            target_id = args.attachment
+
+            # Helper to download and save one item
+            def download_and_save(item, out_path_arg):
+                data, mime, fname = item.download(keep_annotations=args.annotations)
+                if out_path_arg:
+                    out_path = out_path_arg
+                    if out_path.is_dir():
+                        out_path = out_path / fname
+                else:
+                    out_path = None
+
+                if out_path:
+                    saved_path = docuware.write_binary_file(data, out_path)
+                    if args.verbose:
+                        print(f"Downloaded {fname} to {saved_path}", file=sys.stderr)
+                else:
+                    try:
+                        sys.stdout.buffer.write(data)
+                    except AttributeError:
+                        sys.stdout.write(data.decode("latin1"))
+
+            if target_id == "*":
+                # Wildcard download
+                if not args.output or not args.output.is_dir():
+                    print(
+                        "Error: --output must be a directory when using wildcard attachment download",
+                        file=sys.stderr,
+                    )
+                    return 1
+
+                for att in doc.attachments:
+                    download_and_save(att, args.output)
+                return 0
+
+            # Single target download
+            content_object = None
+            if target_id == "document":
+                content_object = doc
+            else:
+                for att in doc.attachments:
+                    if att.id == target_id:
+                        content_object = att
+                        break
+
+            if not content_object:
+                print(f"Attachment '{target_id}' not found", file=sys.stderr)
+                return 1
+
+            download_and_save(content_object, args.output)
+            return 0
+
+        # Info mode (default)
+        print(doc)
+        print(indent(1), "Metadata")
+        for fld in doc.fields:
+            if fld.value is not None:
+                if not fld.internal or args.verbose:
+                    print(indent(2), fld)
+
+        print(indent(1), "Attachments")
+        for att in doc.attachments:
+            print(indent(2), att)
+
+    except Exception as e:
+        print(f"Error getting document: {e}", file=sys.stderr)
+        if args.verbose:
+            import traceback
+
+            traceback.print_exc()
+        return 1
+    return 0
+
+
+def parse_fields_arg(args: List[str]) -> Dict[str, Any]:
+    fields = {}
+    for arg in args:
+        if "=" in arg:
+            key, value = arg.split("=", 1)
+            fields[key] = value
+        else:
+            print(f"Warning: Ignoring invalid field spec '{arg}'", file=sys.stderr)
+    return fields
+
+
+def get_file_cabinet(dw: docuware.Client, name: str) -> Optional[docuware.FileCabinet]:
+    for org in dw.organizations:
+        for fc in org.file_cabinets:
+            if fc.name.casefold() == name:
+                # We need to return concrete FileCabinet or verify it is one
+                return fc  # type: ignore
+    return None
+
+
+def create_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
+    fc = get_file_cabinet(dw, args.file_cabinet)
+    if not fc:
+        print(f"File cabinet '{args.file_cabinet}' not found", file=sys.stderr)
+        return 1
+
+    fields = parse_fields_arg(args.fields)
+    try:
+        doc = fc.create_document(fields=fields)
+        print(f"Created document: {doc}")
+
+        if args.file:
+            att = doc.upload_attachment(args.file)
+            print(f"Uploaded attachment: {att}")
+    except Exception as e:
+        print(f"Error creating document: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def update_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
+    fc = get_file_cabinet(dw, args.file_cabinet)
+    if not fc:
+        print(f"File cabinet '{args.file_cabinet}' not found", file=sys.stderr)
+        return 1
+
+    try:
+        doc = fc.get_document(args.id)
+        fields = parse_fields_arg(args.fields)
+        if fields:
+            doc.update(fields)
+            print(f"Updated document: {doc}")
+        else:
+            print("No fields to update")
+    except Exception as e:
+        print(f"Error updating document: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def attach_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
+    fc = get_file_cabinet(dw, args.file_cabinet)
+    if not fc:
+        print(f"File cabinet '{args.file_cabinet}' not found", file=sys.stderr)
+        return 1
+
+    try:
+        doc = fc.get_document(args.id)
+        att = doc.upload_attachment(args.file)
+        print(f"Added attachment: {att}")
+    except Exception as e:
+        # Get full traceback for debugging? Use verbose?
+        print(f"Error attaching file: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def detach_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
+    fc = get_file_cabinet(dw, args.file_cabinet)
+    if not fc:
+        print(f"File cabinet '{args.file_cabinet}' not found", file=sys.stderr)
+        return 1
+
+    try:
+        doc = fc.get_document(args.id)
+        # Find attachment
+        attachment = None
+        for att in doc.attachments:
+            if att.id == args.attachment_id:
+                attachment = att
+                break
+
+        if attachment:
+            attachment.delete()
+            print(f"Deleted attachment: {attachment}")
+        else:
+            print(f"Attachment '{args.attachment_id}' not found", file=sys.stderr)
+            return 1
+    except Exception as e:
+        print(f"Error detaching file: {e}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def list_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
@@ -207,11 +471,9 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     return 0
 
 
-def main() -> None:
-    args = parse_arguments()
+def connect(args: argparse.Namespace) -> docuware.Client:
     cred_file = args.config_dir / ".credentials"
     session_file = args.config_dir / ".session"
-
     if args.subcommand == "login":
         dw = docuware.Client(args.url, verify_certificate=not args.ignore_certificate)
         try:
@@ -267,16 +529,31 @@ def main() -> None:
         with open(session_file, "w") as f:
             json.dump(session, f)
 
+    return dw
+
+
+COMMANDS: Dict[str, Any] = {
+    "list": list_cmd,
+    "search": search_cmd,
+    "get": get_cmd,
+    "tasks": tasks_cmd,
+    "info": info_cmd,
+    "create": create_cmd,
+    "update": update_cmd,
+    "attach": attach_cmd,
+    "detach": detach_cmd,
+}
+
+
+def main() -> None:
+    args = parse_arguments()
+    dw = connect(args)
     code = None
+
     try:
-        if args.subcommand == "list":
-            code = list_cmd(dw, args)
-        elif args.subcommand == "search":
-            code = search_cmd(dw, args)
-        elif args.subcommand == "tasks":
-            code = tasks_cmd(dw, args)
-        elif args.subcommand == "info":
-            code = info_cmd(dw, args)
+        func = COMMANDS.get(args.subcommand)
+        if func:
+            code = func(dw, args)
     except BrokenPipeError:
         pass
     except KeyboardInterrupt:

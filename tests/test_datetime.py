@@ -1,12 +1,10 @@
 import unittest
-
-from datetime import datetime, date
+from datetime import date, datetime
 
 from docuware import utils
 
 
 class DateTimeTests(unittest.TestCase):
-
     DATETIME_1 = datetime(2022, 3, 5, 13, 37, 24)
     DATETIME_1_STR = "/Date(1646483844000)/"
     DATE_1 = date(2022, 3, 5)
@@ -19,4 +17,3 @@ class DateTimeTests(unittest.TestCase):
     def test_date2str(self):
         self.assertEqual(utils.date_to_string(self.DATE_1), self.DATE_1_STR)
         self.assertEqual(utils.date_from_string(self.DATE_1_STR), self.DATE_1)
-

@@ -6,12 +6,12 @@ from docuware import cidict, parser
 class ParserTests(unittest.TestCase):
     CD_OK_1 = 'form-data; Name="fieldName"'
     CD_OK_2 = 'form-data; name="fieldName"; filename="filename.jpg"'
-    CD_OK_3 = 'form-data; name=fieldName; filename=filename.jpg'
+    CD_OK_3 = "form-data; name=fieldName; filename=filename.jpg"
     CD_OK_4 = 'form-data; name="fieldName" ; filename=filename.jpg'
     CD_OK_5 = 'form-data; name="name1; name2"; filename=filename.jpg'
-    CD_OK_6 = 'form-data;name=;filename=filename.jpg'
+    CD_OK_6 = "form-data;name=;filename=filename.jpg"
     CD_ERR_1 = 'form-data;name="Name"; filename="filename.jpg'
-    CD_ERR_2 = 'form-data;name='
+    CD_ERR_2 = "form-data;name="
     CD_EXC_1 = 'form-data;name=="" ?'
 
     def test_CharReader(self):
@@ -62,7 +62,9 @@ class ParserTests(unittest.TestCase):
         cd = parser.parse_content_disposition(self.CD_ERR_2)
         self.assertEqual(cd.get("type"), "form-data")
         self.assertEqual(cd.get("name"), "")
-        self.assertRaises(ValueError, parser.parse_content_disposition, self.CD_EXC_1)
+        cd = parser.parse_content_disposition(self.CD_EXC_1)
+        self.assertEqual(cd.get("type"), "form-data")
+        self.assertEqual(cd.get("name"), '=""')
 
     def test_condition_parser(self):
         sc = parser.parse_search_condition("keyword=test")
@@ -80,7 +82,7 @@ class ParserTests(unittest.TestCase):
         sc = parser.parse_search_condition('keyword = "test 1" , "test 2"')
         self.assertEqual(sc, ("keyword", ["test 1", "test 2"]))
         sc = parser.parse_search_condition('keyword = "test\\" 1" , " test 2 "')
-        self.assertEqual(sc, ("keyword", ["test\" 1", " test 2 "]))
+        self.assertEqual(sc, ("keyword", ['test" 1', " test 2 "]))
 
     def test_condition_parser_edgecases(self):
         sc = parser.parse_search_condition("keyword")

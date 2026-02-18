@@ -1,46 +1,49 @@
 import unittest
 
-from docuware.structs import ResourcePattern, Endpoints
 from docuware.errors import InternalError
+from docuware.structs import Endpoints, ResourcePattern
 
 
 class StructTests(unittest.TestCase):
-
     def test_ResourcePattern(self):
         name = "dialog"
         pattern = "/DocuWare/Platform/FileCabinets/{fcId}/Dialogs/{dlgId}?dialogType={dlgType}"
         url = "/DocuWare/Platform/FileCabinets/A/Dialogs/B?dialogType=C"
-        p = ResourcePattern({"Name": name, "UriPattern": pattern,})
+        p = ResourcePattern(
+            {
+                "Name": name,
+                "UriPattern": pattern,
+            }
+        )
         self.assertEqual(p.name, name)
         self.assertEqual(p.pattern, pattern)
         self.assertEqual(p.fields, ["fcId", "dlgId", "dlgType"])
         self.assertEqual(p.apply({"dlgId": "B", "fcId": "A", "dlgType": "C"}), url)
         self.assertRaises(InternalError, p.apply, {"dlgId": "B", "dlgType": "C"}, strict=True)
-        self.assertRaises(InternalError, p.apply, {"fcId": "A", "dlgId": "B", "dlgType": "C", "error": "D"}, strict=True)
+        self.assertRaises(
+            InternalError,
+            p.apply,
+            {"fcId": "A", "dlgId": "B", "dlgType": "C", "error": "D"},
+            strict=True,
+        )
 
     ENDPOINT_TEST_DATA = {
         "Links": [
-            {
-                "rel": "schemaSearch",
-                "href": "/DocuWare/Platform/Schema/Search"
-            },
+            {"rel": "schemaSearch", "href": "/DocuWare/Platform/Schema/Search"},
             {
                 "rel": "uriTemplatesDocumentation",
-                "href": "/DocuWare/Platform/Home/UriTemplatesDocumentation"
+                "href": "/DocuWare/Platform/Home/UriTemplatesDocumentation",
             },
-            {
-                "rel": "schemas",
-                "href": "/DocuWare/Platform/Schema"
-            },
+            {"rel": "schemas", "href": "/DocuWare/Platform/Schema"},
             {
                 "rel": "linkModelOverview",
-                "href": "/DocuWare/Platform/Content/PlatformLinkModel.pdf"
+                "href": "/DocuWare/Platform/Content/PlatformLinkModel.pdf",
             },
             {
                 "rel": "documentation",
                 "href": "/DocuWare/Platform/Documentation",
-                "type": "text/html"
-            }
+                "type": "text/html",
+            },
         ]
     }
 

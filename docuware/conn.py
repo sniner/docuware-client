@@ -217,15 +217,31 @@ class Connection(types.ConnectionP):
         headers: Optional[Dict[str, str]] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
+        files: Optional[Any] = None,
+        params: Optional[Any] = None,
     ) -> httpx.Response:
         headers = {**DEFAULT_HEADERS, **headers} if headers else DEFAULT_HEADERS
         content = data if isinstance(data, (bytes, str)) else None
         data = data if isinstance(data, dict) else None
-        resp = self.session.post(url, headers=headers, json=json, data=data, content=content)
+        resp = self.session.post(
+            url,
+            headers=headers,
+            json=json,
+            data=data,
+            content=content,
+            files=files,
+            params=params,
+        )
         if resp.status_code in (401, 403) and self.authenticator:
             self.session = self.authenticator.authenticate(self)
             resp = self.session.post(
-                url, headers=headers, json=json, data=data, content=content
+                url,
+                headers=headers,
+                json=json,
+                data=data,
+                content=content,
+                files=files,
+                params=params,
             )
         return resp
 
@@ -235,9 +251,15 @@ class Connection(types.ConnectionP):
         headers: Optional[Dict[str, str]] = None,
         json: Optional[Dict] = None,
         data: Optional[Any] = None,
+        files: Optional[Any] = None,
+        params: Optional[Any] = None,
     ) -> httpx.Response:
+        # httpx's post() method accepts a params argument, which will be appended to the URL.
+        # This is preferred over passing query parameters to make_url(), because httpx handles escaping properly.
         url = self.make_url(path)
-        resp = self._post(url, headers=headers, json=json, data=data)
+        resp = self._post(
+            url, headers=headers, json=json, data=data, files=files, params=params
+        )
         if resp.status_code == 200:
             return resp
         else:

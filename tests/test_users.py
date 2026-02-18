@@ -4,7 +4,6 @@ from docuware import users
 
 
 class UserAndGroupTests(unittest.TestCase):
-
     def test_user_full_name_1(self):
         u = users.User("John Doe")
         self.assertEqual(u.name, "John Doe")
@@ -22,7 +21,7 @@ class UserAndGroupTests(unittest.TestCase):
         self.assertEqual(u.name, "John Doe")
         self.assertEqual(u.last_name, "Doe")
         self.assertEqual(u.first_name, "John")
-    
+
     def test_user_parts_2(self):
         u = users.User(last_name="Doe")
         self.assertEqual(u.name, "Doe")
@@ -48,6 +47,7 @@ class UserAndGroupTests(unittest.TestCase):
     def test_group_create(self):
         g = users.Group(name="TestGroup")
         self.assertEqual(g.name, "TestGroup")
-        
+
+
 if __name__ == "__main__":
     unittest.main()

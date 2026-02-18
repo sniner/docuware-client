@@ -100,10 +100,11 @@ def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
     return candidate
 
 
-def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> None:
+def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> pathlib.Path:
     path = unique_filename(path)
     with open(path, "wb") as f:
         f.write(blob)
+    return path
 
 
 def random_password(length: int = 16) -> str:

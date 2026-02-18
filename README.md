@@ -76,7 +76,11 @@ directly.
 
 ```python
 org = dw.organization("1")
+```python
+org = dw.organization("1")
 fc = org.file_cabinet("Archive")
+# If you only know the ID:
+doc = fc.get_document(123456)
 ```
 
 Now some examples of how to search for documents. First you need a search
@@ -149,25 +153,23 @@ for result in dlg.search("DOCNO=123456"):
         docuware.write_binary_file(data, filename)
 ```
 
-Create data entry in file cabinet:
+Create a new document with index fields:
+
 ```python
 data = {
-    "FIELD1": "value1",
-    "FIELD2": "value2",
+    "Subject": "My Document",
+    "Date": "2023-01-01",
 }
-response = fc.create_data_entry(data)
+# Create document:
+doc = fc.create_document(fields=data)
+# Add a file as attachment to the new document:
+doc.upload_attachment("path/to/file.pdf")
 ```
 
-_Subject to rewrite:_ Update data fields of document. The search parameter must
-return a single document. Use a loop to execute this function on multiple
-documents:
+Update index fields of a document:
 
 ```python
-fields = {
-    "FIELD1": "value1",
-    "FIELD2": 99999
-}
-response = fc.update_data_entry(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"], fields)
+doc.update({"Status": "Approved", "Amount": 120.0})
 ```
 
 Delete documents:
@@ -238,6 +240,43 @@ Downloading documents:
 
 ```console
 $ dw-client search --file-cabinet Archive Customer=Foo\* --download document --annotations
+```
+
+> Note: `--annotations` forces the download as a PDF with annotations embedded. Without this flag, the document is downloaded in its original format without annotations.
+
+Downloading a specific document by ID (new in v0.6.1):
+
+```console
+$ dw-client get --file-cabinet Archive --id 123456
+```
+
+Downloading attachments of a specific document:
+
+```console
+# Download document itself (original format) to stdout:
+$ dw-client get --file-cabinet Archive --id 123456 --attachment document > output.pdf
+
+# Download specific attachment:
+$ dw-client get --file-cabinet Archive --id 123456 --attachment ATTACHMENT_ID --output my_file.pdf
+
+# Download all attachments to a directory:
+$ dw-client get --file-cabinet Archive --id 123456 --attachment "*" --output ./downloads/
+```
+
+Creating and updating documents:
+
+```console
+# Create a new document with index fields:
+$ dw-client create --file-cabinet Archive --file invoice.pdf Subject="New Invoice" Amount=100.50
+
+# Update index fields of an existing document:
+$ dw-client update --file-cabinet Archive --id 123456 Status=Approved
+
+# Add an attachment to a document:
+$ dw-client attach --file-cabinet Archive --id 123456 --file supplement.pdf
+
+# Remove an attachment:
+$ dw-client detach --file-cabinet Archive --id 123456 --attachment-id ATTACHMENT_ID
 ```
 
 Downloading attachments (or sections):

@@ -6,6 +6,8 @@
 /.credentials
 /build
 /dist
+/prod
 *.pyc
 *.egg-info/
 /*.py
+/*.pdf

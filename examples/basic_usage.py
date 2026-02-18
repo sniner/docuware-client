@@ -22,7 +22,9 @@ def main():
         client = connect(verify_certificate=False)
     except ValueError as e:
         print(f"Connection failed: {e}")
-        print("Please provide credentials via arguments, environment variables, or a .credentials file.")
+        print(
+            "Please provide credentials via arguments, environment variables, or a .credentials file."
+        )
         sys.exit(1)
 
     print(f"Connected to {client.conn.base_url}")
@@ -59,42 +61,42 @@ def main():
 
     # Use a dialog to search
     # "Search" is the default name for the standard search dialog
-    dialog = fc.search_dialog("Search") 
+    dialog = fc.search_dialog("Search")
     if not dialog:
         # Fallback: use any available search dialog
         dialog = fc.search_dialog()
-    
+
     if not dialog:
         print(f"No search dialog found for '{fc.name}'.")
         return
 
     print(f"\n--- Searching in '{fc.name}' using '{dialog.name}' ---")
-    
+
     # Example search: Find all documents (modified recently if possible, or just all)
     # You can pass a query string like "DOCTYPE=Invoice" or a dictionary
     try:
         # Search for everything (careful with large archives!)
         # Using a limit is a good practice, though handling it in the loop is easier here
-        search_results = dialog.search(conditions=[]) 
-        
+        search_results = dialog.search(conditions=[])
+
         print(f"Found {search_results.count} documents.")
 
         for i, item in enumerate(search_results):
             if i >= 5:
                 print("... (stopping after 5 results)")
                 break
-            
+
             # 'item' is a SearchResultItem
-            print(f"\nDocument [{i+1}]: {item.title or 'No Title'} (ID: {item.document.id})")
+            print(f"\nDocument [{i + 1}]: {item.title or 'No Title'} (ID: {item.document.id})")
             print(f"  Content Type: {item.content_type}")
-            
+
             # Access fields
             # item.fields is a list of FieldValue objects
             print("  Fields:")
             for field in item.fields:
-                if field.value: # Only print non-empty fields
+                if field.value:  # Only print non-empty fields
                     print(f"    - {field.name}: {field.value}")
-            
+
             # You can also access the full document object for more details
             # doc = item.document
             # print(f"  Created at: {doc.created}")

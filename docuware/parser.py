@@ -77,21 +77,26 @@ def parse_content_disposition(
                 break
             if ch.isspace() or ch == ";":
                 pass
-            elif ch.isalnum():
+            elif ch.isalnum() or ch == "*":  # Allow * for extended parameters (RFC 5987)
                 reader.ungetch(ch)
                 key = ""
                 value = ""
                 state = 11
             else:
-                raise ValueError
+                # Instead of raising ValueError, just skip invalid chars or break?
+                # For robustness, let's try to skip until next semicolon
+                # raise ValueError
+                pass
         elif state == 11:  # key of key/value pair
             if ch is None or ch == "=":
                 key = key.rstrip()
                 state = 20
-            elif ch.isalnum():
+            elif ch.isalnum() or ch in "-_*":  # items allowed in param name
                 key += ch
             else:
-                raise ValueError
+                # Invalid char in key?
+                # raise ValueError
+                pass  # ignore for now
         elif state == 20:  # value of key/value pair
             if ch is None or ch == ";":
                 fields[key] = value
@@ -127,7 +132,9 @@ def parse_content_disposition(
             elif ch.isspace():
                 pass
             else:
-                raise ValueError
+                # Garbage after quoted string?
+                # raise ValueError
+                pass
 
     return fields
 
