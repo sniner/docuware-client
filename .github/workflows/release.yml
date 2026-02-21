@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Run Tests
+        run: poetry run pytest
+
+  release:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Build package
+        run: poetry build
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+          generate_release_notes: true
+
+  build-windows:
+    runs-on: windows-latest
+    needs: release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Create virtual environment and install dependencies
+        run: |
+          poetry install
+          poetry run pip install pyinstaller
+
+      - name: Build EXEs with PyInstaller
+        run: |
+          poetry run pyinstaller --onefile --name dw-client docuware/cli/dw.py
+
+      - name: Upload Error Logs (if failed to build)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyinstaller-logs
+          path: build/*/warn-*.txt
+
+      - name: Upload EXEs to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/dw-client.exe

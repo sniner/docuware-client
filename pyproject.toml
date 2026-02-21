@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "docuware-client"
-version = "0.6.1"
+version = "0.6.2"
 description = "DocuWare REST-API client"
-authors = ["Stefan Schönberger <mail@sniner.dev>"]
+authors = ["Stefan Schönberger <stefan@sniner.dev>"]
 readme = "README.md"
 packages = [{ include = "docuware" }]
 license = "BSD-3-Clause"
