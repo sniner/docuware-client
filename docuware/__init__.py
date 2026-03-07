@@ -24,3 +24,26 @@ from docuware.utils import (
 )
 
 Client = DocuwareClient
+
+__all__ = [
+    "AccountError",
+    "ApiError",
+    "Client",
+    "DataError",
+    "DocuwareClientException",
+    "DocuwareClient",
+    "FileCabinet",
+    "Group",
+    "InternalError",
+    "Organization",
+    "ResourceError",
+    "ResourceNotFoundError",
+    "SearchConditionError",
+    "SearchDialog",
+    "User",
+    "UserOrGroupError",
+    "connect",
+    "random_password",
+    "unique_filename",
+    "write_binary_file",
+]

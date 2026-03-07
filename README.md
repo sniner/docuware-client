@@ -76,8 +76,6 @@ directly.
 
 ```python
 org = dw.organization("1")
-```python
-org = dw.organization("1")
 fc = org.file_cabinet("Archive")
 # If you only know the ID:
 doc = fc.get_document(123456)

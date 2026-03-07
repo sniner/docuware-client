@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "docuware-client"
-version = "0.6.2"
+version = "0.6.3"
 description = "DocuWare REST-API client"
 authors = ["Stefan Schönberger <stefan@sniner.dev>"]
 readme = "README.md"
@@ -15,11 +15,12 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = ">=3.9"
-httpx = {extras = ["http2"], version = "^0.28.1"}
+httpx = {extras = ["http2"], version = ">=0.23.0"}
 
 [tool.poetry.group.dev.dependencies]
-pylint = "^3.3.1"
 pytest = "^8.2.2"
+basedpyright = "^1.38.2"
+ruff = "^0.15.5"
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"
