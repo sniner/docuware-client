@@ -4,6 +4,7 @@ import json as stdjson
 import logging
 import urllib.parse as urlparse
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
@@ -24,6 +25,17 @@ JSON_HEADERS = {
 TEXT_HEADERS = {
     "Accept": "text/plain",
 }
+
+
+class BearerAuth(httpx.Auth):
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+    def auth_flow(
+        self, request: httpx.Request
+    ) -> Generator[httpx.Request, httpx.Response, None]:
+        request.headers["Authorization"] = f"Bearer {self.token}"
+        yield request
 
 
 class Authenticator(ABC, types.AuthenticatorP):
@@ -130,11 +142,7 @@ class OAuth2Authenticator(Authenticator):
         self.result: Dict = {}
 
     def _apply_access_token(self, conn: types.ConnectionP, token: Optional[str]) -> None:
-        if token:
-            conn.session.headers.update({"Authorization": f"Bearer {token}"})
-        else:
-            if "Authorization" in conn.session.headers:
-                del conn.session.headers["Authorization"]
+        conn.session.auth = BearerAuth(token) if token else None  # type: ignore[assignment]
 
     def _get_access_token(self, conn: types.ConnectionP) -> Optional[str]:
         log.debug("Requesting access token")
