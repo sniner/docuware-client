@@ -1,26 +1,46 @@
-[tool.poetry]
+[project]
 name = "docuware-client"
-version = "0.6.3"
+version = "0.7.0"
 description = "DocuWare REST-API client"
-authors = ["Stefan Schönberger <stefan@sniner.dev>"]
+authors = [{ name = "Stefan Schönberger", email = "stefan@sniner.dev" }]
+requires-python = ">=3.9"
 readme = "README.md"
-packages = [{ include = "docuware" }]
 license = "BSD-3-Clause"
-repository = "https://github.com/sniner/docuware-client"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = ["httpx[http2]>=0.23.0"]
+
+[project.urls]
+Repository = "https://github.com/sniner/docuware-client"
+
+[project.scripts]
+dw-client = "docuware.cli.dw:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2.2,<9",
+    "basedpyright>=1.38.2,<2",
+    "ruff>=0.15.5,<0.16",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.9"
-httpx = {extras = ["http2"], version = ">=0.23.0"}
+[tool.uv]
+default-groups = "all"
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.2.2"
-basedpyright = "^1.38.2"
-ruff = "^0.15.5"
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "docuware"
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"
@@ -34,14 +54,7 @@ venv = ".venv"
 
 [tool.ruff]
 line-length = 96
-ignore = ["E402"]
 
 [tool.ruff.lint]
+ignore = ["E402"]
 per-file-ignores = { "__init__.py" = ["F401"] }
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-dw-client = "docuware.cli.dw:main"

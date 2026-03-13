@@ -11,8 +11,12 @@ class TestSearchFlow(unittest.TestCase):
 
         def handler(request: httpx.Request):
             path = request.url.path
-            if path == "/DocuWare/Platform/Account/Logon":
-                return httpx.Response(200, json={"Token": "mock_token"})
+            if path == "/DocuWare/Platform/Home/IdentityServiceInfo":
+                return httpx.Response(200, json={"IdentityServiceUrl": "https://example.com/DocuWare/Identity"})
+            elif path == "/DocuWare/Identity/.well-known/openid-configuration":
+                return httpx.Response(200, json={"token_endpoint": "/DocuWare/Identity/connect/token"})
+            elif path == "/DocuWare/Identity/connect/token":
+                return httpx.Response(200, json={"access_token": "mock_token"})
             elif path == "/DocuWare/Platform":
                 return httpx.Response(
                     200,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Generator, Literal, Optional, Sequence, overload
+from typing import Dict, List, Literal, Optional, Sequence, overload
 
 from docuware import cidict, dialogs, filecabinet, structs, types, users
 
@@ -16,15 +16,20 @@ class Organization:
         self.endpoints = structs.Endpoints(config)
         self._info: Optional[cidict.CaseInsensitiveDict] = None
         self._dialogs: Optional[Sequence[types.DialogP]] = None
+        self._file_cabinets: Optional[List[types.FileCabinetP]] = None
 
     @property
     def conn(self) -> types.ConnectionP:
         return self.client.conn
 
     @property
-    def file_cabinets(self) -> Generator[types.FileCabinetP, None, None]:
-        result = self.client.conn.get_json(self.endpoints["filecabinets"])
-        return (filecabinet.FileCabinet(fc, self) for fc in result.get("FileCabinet", []))
+    def file_cabinets(self) -> List[types.FileCabinetP]:
+        if self._file_cabinets is None:
+            result = self.client.conn.get_json(self.endpoints["filecabinets"])
+            self._file_cabinets = [
+                filecabinet.FileCabinet(fc, self) for fc in result.get("FileCabinet", [])
+            ]
+        return self._file_cabinets
 
     @overload
     def file_cabinet(self, key: str, *, required: Literal[True]) -> types.FileCabinetP: ...
@@ -83,6 +88,3 @@ class Organization:
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
-
-
-# vim: set et sw=4 ts=4:

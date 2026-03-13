@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import re
 from typing import (
+    Any,
     Dict,
     Iterable,
     List,
     Optional,
+    Tuple,
     Type,
     Union,
     overload,
@@ -74,6 +76,25 @@ class Resources(cidict.CaseInsensitiveDict[ResourcePattern]):
 
 
 EMPTY_RESOURCE_TABLE = Resources(config={})
+
+
+def python_to_dw_field(value: Any) -> Tuple[str, Any]:
+    """Map a Python value to a DocuWare field type name and serialized value.
+
+    Returns a tuple of (type_name, serialized_value) where type_name is the
+    DocuWare field type string (e.g. "String", "Int", "Bool", "Decimal", "DateTime")
+    and serialized_value is the value ready for JSON serialization.
+    Note: bool must be checked before int since bool is a subclass of int.
+    """
+    if isinstance(value, bool):
+        return "Bool", value
+    if isinstance(value, int):
+        return "Int", value
+    if isinstance(value, float):
+        return "Decimal", value
+    if hasattr(value, "isoformat"):  # datetime or date
+        return "DateTime", value.isoformat()
+    return "String", value
 
 
 @overload
@@ -151,6 +172,3 @@ def first_item_by_class(
         raise KeyError(cls.__name__)
     else:
         return default
-
-
-# vim: set et sw=4 ts=4:

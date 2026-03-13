@@ -1,7 +1,21 @@
 import logging
+import os
+import pathlib
 import sys
 
+import docuware
 from docuware import connect
+
+
+def default_credentials_file() -> pathlib.Path:
+    default_path = pathlib.Path(".credentials")
+    if default_path.exists():
+        return default_path
+    base = os.environ.get("XDG_CONFIG_HOME")
+    if base:
+        return pathlib.Path(base) / "docuware-client" / default_path.name
+    return pathlib.Path.home() / ".docuware-client.cred"
+
 
 # Setup logging to see what's happening
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -16,15 +30,11 @@ def main():
     # This looks for credentials in:
     # 1. Arguments (if provided)
     # 2. Environment variables (DW_URL, DW_USERNAME, DW_PASSWORD, DW_ORG)
-    # 3. .credentials file in the current directory or config dir
-    # 4. .session file (reusing previous login)
+    # 3. .credentials file ($XDG_CONFIG_HOME/docuware-client/.credentials or $HOME/.docuware-client.cred)
     try:
-        client = connect(verify_certificate=False)
-    except ValueError as e:
+        client = connect(verify_certificate=False, credentials_file=default_credentials_file())
+    except docuware.DocuwareClientException as e:
         print(f"Connection failed: {e}")
-        print(
-            "Please provide credentials via arguments, environment variables, or a .credentials file."
-        )
         sys.exit(1)
 
     print(f"Connected to {client.conn.base_url}")
@@ -52,12 +62,11 @@ def main():
     if not fc:
         print(f"\nFile cabinet '{FC_ID}' not found in organization '{org.name}'.")
         # Try to pick the first one available
-        try:
-            fc = next(org.file_cabinets)
-            print(f"Using first available file cabinet: {fc.name}")
-        except StopIteration:
+        if not org.file_cabinets:
             print("No file cabinets found.")
             return
+        fc = org.file_cabinets[0]
+        print(f"Using first available file cabinet: {fc.name}")
 
     # Use a dialog to search
     # "Search" is the default name for the standard search dialog

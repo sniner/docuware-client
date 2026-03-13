@@ -8,58 +8,44 @@ functionality.
 Please keep in mind: **This software is not related to DocuWare.** It is a work
 in progress, may yield unexpected results, and almost certainly contains bugs.
 
-> ⚠️ Starting with version 0.5.0, OAuth2 authentication is the new default.
-> Unless you explicitly request cookie authentication with
-> `dw.login(..., cookie_auth=True)`, OAuth2 will be used. OAuth2 authentication
-> has been available since DocuWare 7.10, and
-> [cookie authentication will be discontinued](https://start.docuware.com/blog/product-news/docuware-sdk-discontinuation-of-cookie-authentication)
-> with DocuWare 7.11.
+> **Breaking change in 0.7.0 — OAuth2 only**
 >
-> ⚠️ Introduced in version 0.6.0, `httpx` is used instead of `requests`. The API
-> should be largely compatible, but if you rely on specific `requests` behavior,
-> implementation details or `requests` structures (like `Session`), please stay
-> on version 0.5.x.
-
+> Starting with version 0.7.0, **only OAuth2 authentication is supported.**
+> Cookie-based authentication has been removed completely.
+> If you rely on cookie authentication, please stay on version **0.6.x**.
+>
+> OAuth2 requires DocuWare 7.10 or later. Credentials are stored in a
+> `.credentials` file; the `.session` file is no longer created or used.
 
 ## Usage
 
-First you have to log in and create a persistent session:
+The recommended way to connect is via `docuware.connect()`, which resolves
+credentials from arguments, environment variables, or a `.credentials` file
+and handles login automatically:
 
 ```python
-import json
-import pathlib
+import docuware
+
+# Credentials from arguments:
+dw = docuware.connect(url="http://localhost", username="...", password="...", organization="...")
+
+# Or from environment variables DW_URL, DW_USERNAME, DW_PASSWORD, DW_ORG:
+dw = docuware.connect()
+
+# Or from a .credentials file:
+dw = docuware.connect(credentials_file="/path/to/.credentials")
+```
+
+Credentials are saved automatically to the file specified by `credentials_file`
+after a successfull login.
+
+For more control, use `DocuwareClient` and `login()` explicitly:
+
+```python
 import docuware
 
 dw = docuware.Client("http://localhost")
-session = dw.login("username", "password", "organization")
-with open(".session", "w") as f:
-    json.dump(session, f)
-```
-
-From then on you have to reuse the session, otherwise you will be locked out of
-the DocuWare service for a period of time (10 minutes or even longer). As the
-session cookie may change on subsequent logins, update the session file on
-every login.
-
-```python
-session_file = pathlib.Path(".session")
-if session_file.exists():
-    with open(session_file) as f:
-        session = json.load(f)
-else:
-    session = None
-dw = docuware.Client("http://localhost")
-session = dw.login("username", "password", "organization", saved_session=session)
-with open(session_file, "w") as f:
-    json.dump(session, f)
-```
-
-Or simpler, using the `connect` function which handles sessions and credentials automatically:
-
-```python
-# Tries to find credentials in arguments, environment variables DW_USERNAME, DW_PASSWORD,
-# DW_ORG or .credentials file
-dw = docuware.connect(url="http://localhost", username="...", password="...")
+dw.login("username", "password", "organization")
 ```
 
 Iterate over the organizations and file cabinets:
@@ -217,8 +203,9 @@ First you need to log in:
 $ dw-client login --url http://localhost/ --username "Doe, John" --password FooBar --organization "Doe Inc."
 ```
 
-The credentials and the session cookie are stored in the `.credentials` and
-`.session` files in the current directory.
+The credentials are stored in `$XDG_CONFIG_HOME/docuware-client/.credentials`
+(or `$HOME/.docuware-client.cred` if `XDG_CONFIG_HOME` is not set).
+Use `--credentials-file /path/to/file` to specify a different location.
 
 Of course, `--help` will give you a list of all options:
 

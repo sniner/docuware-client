@@ -32,6 +32,3 @@ class MyTasks(types.MyTasksP):
             return next(self._tasks)
         else:
             raise StopIteration
-
-
-# vim: set et sw=4 ts=4:

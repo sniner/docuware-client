@@ -41,7 +41,7 @@ IdNameT = TypeVar("IdNameT", bound="IdNameP")
 class AuthenticatorP(Protocol):
     def authenticate(self, conn: ConnectionP) -> httpx.Client: ...
 
-    def login(self, conn: ConnectionP) -> Dict: ...
+    def login(self, conn: ConnectionP) -> None: ...
 
     def logoff(self, conn: ConnectionP) -> None: ...
 
@@ -59,51 +59,51 @@ class ConnectionP(Protocol):
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None,
-        files: Optional[Any] = None,
-        params: Optional[Any] = None,
+        json: Optional[Dict[str, Any]] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, str]] = None,
     ) -> httpx.Response: ...
 
     def post_json(
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None,
+        json: Optional[Dict[str, Any]] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
     ) -> Any: ...
 
     def post_text(
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None,
+        json: Optional[Dict[str, Any]] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
     ) -> str: ...
 
     def put(
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        params: Optional[Any] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None,
+        params: Optional[Dict[str, str]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
     ) -> httpx.Response: ...
 
     def put_json(
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        params: Optional[Any] = None,
-        json: Optional[Dict] = None,
-        data: Optional[Any] = None,
+        params: Optional[Dict[str, str]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        data: Optional[Union[Dict[str, Any], str, bytes]] = None,
     ) -> Any: ...
 
     def get(
         self,
         path: str,
         headers: Optional[Dict[str, str]] = None,
-        params: Optional[Any] = None,
+        params: Optional[Dict[str, str]] = None,
     ) -> httpx.Response: ...
 
     def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any: ...
@@ -116,7 +116,7 @@ class ConnectionP(Protocol):
         self,
         path: str,
         mime_type: Optional[str] = None,
-        params: Optional[Any] = None,
+        params: Optional[Dict[str, str]] = None,
     ) -> Tuple[bytes, str, str]: ...
 
 
@@ -125,7 +125,7 @@ class DocuwareClientP(Protocol):
     version: Optional[str]
 
     @property
-    def organizations(self) -> Generator[OrganizationP, None, None]: ...
+    def organizations(self) -> Iterator[OrganizationP]: ...
 
     def organization(
         self,
@@ -136,11 +136,10 @@ class DocuwareClientP(Protocol):
 
     def login(
         self,
-        username: str,
-        password: str,
+        username: Optional[str],
+        password: Optional[str],
         organization: Optional[str] = None,
-        saved_session: Optional[Dict] = None,
-    ) -> Dict: ...
+    ) -> None: ...
 
     def logoff(self) -> None: ...
 
@@ -223,7 +222,7 @@ class OrganizationP(IdNameP, Protocol):
     def conn(self) -> ConnectionP: ...
 
     @property
-    def file_cabinets(self) -> Generator[FileCabinetP, None, None]: ...
+    def file_cabinets(self) -> List[FileCabinetP]: ...
 
     @overload
     def file_cabinet(self, key: str, *, required: Literal[True]) -> FileCabinetP: ...
@@ -383,6 +382,3 @@ class FieldValueP(IdNameP, Protocol):
 
 
 class MyTasksP(Protocol): ...
-
-
-# vim: set et sw=4 ts=4:

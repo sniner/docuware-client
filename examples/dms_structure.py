@@ -1,7 +1,21 @@
 import logging
+import os
+import pathlib
 import sys
 
+import docuware
 from docuware import connect
+
+
+def default_credentials_file() -> pathlib.Path:
+    default_path = pathlib.Path(".credentials")
+    if default_path.exists():
+        return default_path
+    base = os.environ.get("XDG_CONFIG_HOME")
+    if base:
+        return pathlib.Path(base) / "docuware-client" / default_path.name
+    return pathlib.Path.home() / ".docuware-client.cred"
+
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -10,12 +24,9 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 def main():
     try:
-        client = connect(verify_certificate=False)
-    except ValueError as e:
+        client = connect(verify_certificate=False, credentials_file=default_credentials_file())
+    except docuware.DocuwareClientException as e:
         print(f"Connection failed: {e}")
-        print(
-            "Please provide credentials via arguments, environment variables, or a .credentials file."
-        )
         sys.exit(1)
 
     print(f"Connected to {client.conn.base_url}")

@@ -51,6 +51,3 @@ class ResourceNotFoundError(ApiError):
 
 class UserOrGroupError(ApiError):
     pass
-
-
-# vim: set et sw=4 ts=4:

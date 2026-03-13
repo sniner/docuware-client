@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import enum
 from typing import Dict, List, Optional, Tuple, Union
 
 from docuware import cidict
@@ -18,7 +19,7 @@ class CharReader:
         else:
             return next(self._itext, None)
 
-    def ungetch(self, char: Optional[str]):
+    def ungetch(self, char: Optional[str]) -> None:
         if char is not None:
             self._unget_buffer.append(char)
 
@@ -29,6 +30,27 @@ class CharReader:
 
     def __repr__(self) -> str:
         return f"CharReader({repr(self.text)})"
+
+
+class _CDState(enum.IntEnum):
+    TYPE_START = 0
+    TYPE = 1
+    PARAM_START = 10
+    PARAM_KEY = 11
+    PARAM_VALUE_START = 20
+    PARAM_VALUE = 21
+    QUOTED_VALUE = 25
+    AFTER_QUOTE = 26
+
+
+class _SCState(enum.IntEnum):
+    FIELD_START = 0
+    FIELD = 1
+    AFTER_FIELD = 2
+    VALUE_START = 10
+    VALUE = 11
+    QUOTED_VALUE = 20
+    AFTER_VALUE = 30
 
 
 def parse_content_disposition(
@@ -46,15 +68,14 @@ def parse_content_disposition(
     if text is None:
         return fields
 
-    state = 0
+    state = _CDState.TYPE_START
     key = ""
     value = ""
     reader = CharReader(text)
 
     while True:
         ch = reader.getch()
-        # print(state, ch)
-        if state == 0:  # type identifier
+        if state == _CDState.TYPE_START:
             if ch is None:
                 break
             elif ch.isspace():
@@ -62,17 +83,17 @@ def parse_content_disposition(
             else:
                 reader.ungetch(ch)
                 value = ""
-                state = 1
-        elif state == 1:
+                state = _CDState.TYPE
+        elif state == _CDState.TYPE:
             if ch == ";":
                 fields["type"] = value.rstrip()
-                state = 10
+                state = _CDState.PARAM_START
             elif ch is None:
                 fields["type"] = value.rstrip()
                 break
             else:
                 value += ch
-        elif state == 10:  # key/value pair
+        elif state == _CDState.PARAM_START:
             if ch is None:
                 break
             if ch.isspace() or ch == ";":
@@ -81,60 +102,54 @@ def parse_content_disposition(
                 reader.ungetch(ch)
                 key = ""
                 value = ""
-                state = 11
+                state = _CDState.PARAM_KEY
             else:
-                # Instead of raising ValueError, just skip invalid chars or break?
-                # For robustness, let's try to skip until next semicolon
-                # raise ValueError
+                # Invalid char: skip for robustness
                 pass
-        elif state == 11:  # key of key/value pair
+        elif state == _CDState.PARAM_KEY:
             if ch is None or ch == "=":
                 key = key.rstrip()
-                state = 20
+                state = _CDState.PARAM_VALUE_START
             elif ch.isalnum() or ch in "-_*":  # items allowed in param name
                 key += ch
             else:
-                # Invalid char in key?
-                # raise ValueError
-                pass  # ignore for now
-        elif state == 20:  # value of key/value pair
+                pass  # ignore invalid chars in key
+        elif state == _CDState.PARAM_VALUE_START:
             if ch is None or ch == ";":
                 fields[key] = value
-                state = 10
+                state = _CDState.PARAM_START
             elif ch == '"':
-                state = 25
+                state = _CDState.QUOTED_VALUE
             elif ch.isspace():
                 pass
             else:
                 reader.ungetch(ch)
-                state = 21
-        elif state == 21:  # plain value
+                state = _CDState.PARAM_VALUE
+        elif state == _CDState.PARAM_VALUE:
             if ch is None or ch.isspace() or ch == ";":
                 fields[key] = value
-                state = 10
+                state = _CDState.PARAM_START
             else:
                 value += ch
-        elif state == 25:  # value in quotation marks
+        elif state == _CDState.QUOTED_VALUE:
             if ch is None:
-                # unexpected, but ...
+                # unexpected end of string
                 fields[key] = value
                 break
             elif ch == '"':
                 fields[key] = value
-                state = 26
+                state = _CDState.AFTER_QUOTE
             else:
                 value += ch
-        elif state == 26:  # expecting semicolon
+        elif state == _CDState.AFTER_QUOTE:
             if ch is None:
                 break
             elif ch == ";":
-                state = 10
+                state = _CDState.PARAM_START
             elif ch.isspace():
                 pass
             else:
-                # Garbage after quoted string?
-                # raise ValueError
-                pass
+                pass  # garbage after closing quote, ignore
 
     return fields
 
@@ -150,7 +165,7 @@ def parse_search_condition(text: str) -> Tuple[str, List[str]]:
     :return: Tuple of fieldname and list of keywords.
     """
 
-    state = 0
+    state = _SCState.FIELD_START
     value = ""
     fieldname = ""
     keywords = []
@@ -158,8 +173,7 @@ def parse_search_condition(text: str) -> Tuple[str, List[str]]:
 
     while True:
         ch = reader.getch()
-        # print(state, ch)
-        if state == 0:  # before fieldname
+        if state == _SCState.FIELD_START:
             if ch is None:
                 break
             elif ch.isspace():
@@ -167,63 +181,60 @@ def parse_search_condition(text: str) -> Tuple[str, List[str]]:
             else:
                 reader.ungetch(ch)
                 value = ""
-                state = 1
-        elif state == 1:  # fieldname
+                state = _SCState.FIELD
+        elif state == _SCState.FIELD:
             if ch is None:
                 fieldname = value
                 break
             elif ch == "=" or ch.isspace():
                 reader.ungetch(ch)
                 fieldname = value
-                state = 2
+                state = _SCState.AFTER_FIELD
             else:
                 value += ch
-        elif state == 2:  # after fieldname
+        elif state == _SCState.AFTER_FIELD:
             if ch is None:
                 break
             elif ch.isspace():
                 pass
             elif ch == "=":
-                state = 10
+                state = _SCState.VALUE_START
             else:
                 raise ValueError(f"Unexpected character found: '{ch}'")
-        elif state == 10:  # before keyword
+        elif state == _SCState.VALUE_START:
             value = ""
             if ch is None:
                 break
             elif ch.isspace():
                 pass
             elif ch == '"':
-                state = 20
+                state = _SCState.QUOTED_VALUE
             elif ch == "\\":
-                state = 11
+                state = _SCState.VALUE
             else:
                 reader.ungetch(ch)
-                state = 11
-        elif state == 11:  # keyword
+                state = _SCState.VALUE
+        elif state == _SCState.VALUE:
             if ch is None or ch == ",":
                 value = value.rstrip()
-                state = 30
+                state = _SCState.AFTER_VALUE
             else:
                 value += ch
-        elif state == 20:  # "keyword"
+        elif state == _SCState.QUOTED_VALUE:
             if ch is None or ch == '"':
-                # unexpected end
-                state = 30
+                # unexpected end or closing quote
+                state = _SCState.AFTER_VALUE
             elif ch == "\\":
                 value += reader.getch() or ""
             else:
                 value += ch
-        elif state == 30:  # after keyword
+        elif state == _SCState.AFTER_VALUE:
             if value:
                 keywords.append(value)
             if ch is None:
                 break
             else:
                 reader.ungetch(ch)
-                state = 10
+                state = _SCState.VALUE_START
 
     return fieldname, keywords
-
-
-# vim: set et sw=4 ts=4:

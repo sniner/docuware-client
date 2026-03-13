@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import IO, Any
 
 from docuware import cidict
 
@@ -22,20 +22,17 @@ def print_json(data: Any) -> None:
     print(dumps(data, indent=4))
 
 
-def load(*args, **kwargs):
-    return json.load(*args, **kwargs, object_hook=case_insensitive_hook)
+def load(fp: IO[str], **kwargs: Any) -> Any:
+    return json.load(fp, **kwargs, object_hook=case_insensitive_hook)
 
 
-def loads(*args, **kwargs):
-    return json.loads(*args, **kwargs, object_hook=case_insensitive_hook)
+def loads(s: str, **kwargs: Any) -> Any:
+    return json.loads(s, **kwargs, object_hook=case_insensitive_hook)
 
 
-def dump(*args, **kwargs):
-    return json.dump(*args, **kwargs, cls=CIJSONEncoder)
+def dump(obj: Any, fp: IO[str], **kwargs: Any) -> None:
+    json.dump(obj, fp, **kwargs, cls=CIJSONEncoder)
 
 
-def dumps(*args, **kwargs):
-    return json.dumps(*args, **kwargs, cls=CIJSONEncoder)
-
-
-# vim: set et sw=4 ts=4:
+def dumps(obj: Any, **kwargs: Any) -> str:
+    return json.dumps(obj, **kwargs, cls=CIJSONEncoder)

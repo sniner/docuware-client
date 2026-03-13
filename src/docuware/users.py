@@ -196,7 +196,8 @@ class Users(types.UsersP):
         except Exception as exc:
             log.debug("Unable to create user %s: %s", user, exc)
             return None
-        # FIXME: Check result instead of this hack:
+        # The API response does not reliably return the created user object,
+        # so we search the updated user list by DBName to return the new user.
         for item in self:
             if getattr(item, "db_name", None) == body.get("DBName"):
                 return item
@@ -225,16 +226,13 @@ class Group:
         result = self.organization.client.conn.get_json(self.endpoints["users"])
         return (User.from_response(u, self.organization) for u in result.get("User", []))
 
-    # FIXME: Testing needed, the endpoint looks very suspicious
     def _set_user_membership(self, user: types.UserP, include: bool) -> bool:
         if not self.id:
-            # FIXME: raise a better suited exception
-            raise ValueError("Not a registered group")
+            raise errors.UserOrGroupError("Not a registered group")
         if not self.organization:
-            raise ValueError("Group not bound to an organization")
+            raise errors.UserOrGroupError("Group not bound to an organization")
         if not user.id:
-            # FIXME: raise a better suited exception
-            raise ValueError("Not a registered user")
+            raise errors.UserOrGroupError("Not a registered user")
 
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
@@ -284,6 +282,3 @@ class Groups:
             return self.__getitem__(key)
         except KeyError:
             return default
-
-
-# vim: set et sw=4 ts=4:

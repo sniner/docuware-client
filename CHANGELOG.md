@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-03-13
+
+### Breaking changes
+
+- **Cookie authentication removed.** `CookieAuthenticator` and all related session
+  management code have been deleted. Only OAuth2 is supported from this version on.
+  OAuth2 requires DocuWare 7.10 or later. If you rely on cookie authentication,
+  stay on 0.6.x.
+- `.session` files are no longer created or used. Credentials are now stored as
+  JSON in a `.credentials` file.
+
+### Added
+
+- **`dwcontrol.py`**: new `ControlFile` class and `FieldType` enum for generating
+  `.dwcontrol` XML files used by the DocuWare Document Import service
+  (see KBA-34830, KBA-36502).
+- **`BearerAuth`**: dedicated `httpx.Auth` subclass for Bearer token injection,
+  replacing the previous ad-hoc header manipulation.
+
+### Changed
+
+- **Packaging**: migrated from Poetry to [uv](https://docs.astral.sh/uv/);
+  source tree restructured to `src/` layout (`src/docuware/`).
+- **Auth**: `OAuth2Authenticator.login()` now returns `None` instead of the
+  leftover `{"access_token": ...}` dict that was a relic of the cookie
+  authenticator.
+- **Error handling**: `_get_access_token()` always raises on failure instead of
+  silently returning `None`. An HTTP 400 response from the token endpoint is now
+  translated to `AccountError: Login failed: invalid username or password` for a
+  clear user-facing message.
+- **CLI**: credentials are now stored in
+  `$XDG_CONFIG_HOME/docuware-client/.credentials` (fallback:
+  `$HOME/.docuware-client.cred`). `--credentials-file` validates that the given
+  path is not a directory.
+- **Code cleanup**: removed dead code and simplified internals across `conn.py`,
+  `client.py`, `dialogs.py`, `document.py`, `filecabinet.py`, `organization.py`,
+  `parser.py`, `structs.py`, and `utils.py`.
+- **Tests**: mock handlers updated to simulate the full OAuth2 token flow
+  (IdentityServiceInfo → openid-configuration → token endpoint).
+- Updated GitHub Actions workflow for the new `src/` layout and uv.
+
+### Removed
+
+- `CookieAuthenticator` and all cookie/session-based login code.
+- `poetry.lock` (replaced by `uv.lock`).
+
+## [0.6.3] - 2026-03-07
+
+### Added
+
+- **`__init__.py`**: explicit `__all__` for a stable, documented public API surface.
+- `Client` as a shorthand alias for `DocuwareClient`.
+
+### Changed
+
+- Updated dependencies.
+
 ## [0.6.2] - 2026-02-21
 
 ### Added

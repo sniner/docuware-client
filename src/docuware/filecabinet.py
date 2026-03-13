@@ -40,7 +40,6 @@ class FileCabinet:
         return structs.first_item_by_id_or_name(self.dialogs, key, required=required)
 
     @overload
-    @overload
     def search_dialog(
         self, key: Optional[str] = None, *, required: Literal[True]
     ) -> types.SearchDialogP: ...
@@ -76,17 +75,7 @@ class FileCabinet:
         json_fields = []
         if fields:
             for key, value in fields.items():
-                type_name = "String"
-                if isinstance(value, bool):
-                    type_name = "Bool"
-                elif isinstance(value, int):
-                    type_name = "Int"
-                elif isinstance(value, float):
-                    type_name = "Decimal"
-                elif hasattr(value, "isoformat"):  # datetime or date
-                    type_name = "DateTime"
-                    value = value.isoformat()
-
+                type_name, value = structs.python_to_dw_field(value)
                 json_fields.append(
                     {"FieldName": key, "Item": value, "ItemElementName": type_name}
                 )

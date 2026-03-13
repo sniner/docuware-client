@@ -10,7 +10,13 @@ class TestFileCabinetOperations(unittest.TestCase):
         self.client = DocuwareClient("https://example.com")
 
         def handler(request: httpx.Request):
-            if request.url.path == "/DocuWare/Platform":
+            if request.url.path == "/DocuWare/Platform/Home/IdentityServiceInfo":
+                return httpx.Response(200, json={"IdentityServiceUrl": "https://example.com/DocuWare/Identity"})
+            elif request.url.path == "/DocuWare/Identity/.well-known/openid-configuration":
+                return httpx.Response(200, json={"token_endpoint": "/DocuWare/Identity/connect/token"})
+            elif request.url.path == "/DocuWare/Identity/connect/token":
+                return httpx.Response(200, json={"access_token": "mock_token"})
+            elif request.url.path == "/DocuWare/Platform":
                 return httpx.Response(
                     200, json={"Links": [], "Resources": [], "Version": "7.10"}
                 )

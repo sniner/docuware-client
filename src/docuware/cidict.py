@@ -95,6 +95,3 @@ class CaseInsensitiveDict(MutableMapping[str, VT], Generic[VT]):
 
     def __repr__(self) -> str:
         return str(dict(self.items()))
-
-
-# vim: set et sw=4 ts=4:

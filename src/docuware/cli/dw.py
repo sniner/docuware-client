@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import argparse
-import json
+import os
 import pathlib
 import sys
 from typing import Any, Dict, List, Optional
@@ -19,10 +21,9 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--config-dir",
+        "--credentials-file",
         type=pathlib.Path,
-        default=".",
-        help="Directory for configuration files (default: current directory)",
+        help="Path to credentials file",
     )
     parser.add_argument("--verbose", action="store_true", help="Output more messages")
     parser.add_argument(
@@ -35,18 +36,12 @@ def parse_arguments() -> argparse.Namespace:
 
     login_parser = subparsers.add_parser("login", description="Connect to DocuWare server")
     login_parser.add_argument(
-        "--cookie-auth",
-        action="store_true",
-        help="Authenticate with session cookie instead of OAuth2",
-    )
-    login_parser.add_argument(
         "--url",
         type=case_insensitive_string_opt,
-        required=True,
         help="URL of DocuWare server",
     )
-    login_parser.add_argument("--username", type=str, required=True, help="Username")
-    login_parser.add_argument("--password", type=str, required=True, help="Password")
+    login_parser.add_argument("--username", type=str, help="Username")
+    login_parser.add_argument("--password", type=str, help="Password")
     login_parser.add_argument("--organization", type=str, default=None, help="Organization")
 
     list_parser = subparsers.add_parser("list", description="List all assets")
@@ -424,7 +419,7 @@ def list_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     def show_dialog(dlg: types.DialogP) -> None:
         if args.dialog is None or dlg.name.casefold() == args.dialog:
             if isinstance(dlg, docuware.SearchDialog):
-                show_searchdialog(dlg)
+                show_searchdialog(dlg)  # type: ignore
             else:
                 print(indent(2), dlg)
 
@@ -474,62 +469,52 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
 
 
 def connect(args: argparse.Namespace) -> docuware.Client:
-    cred_file = args.config_dir / ".credentials"
-    session_file = args.config_dir / ".session"
+    verify = not args.ignore_certificate
+    cred_file = args.credentials_file
+    if cred_file is None:
+        base_dir = os.environ.get("XDG_CONFIG_HOME")
+        if base_dir:
+            conf_dir = pathlib.Path(base_dir) / "docuware-client"
+            cred_file = conf_dir / ".credentials"
+        else:
+            base_dir = os.environ.get("HOME", ".")
+            conf_dir = pathlib.Path(base_dir)
+            cred_file = conf_dir / ".docuware-client.cred"
+    else:
+        if cred_file.is_dir():
+            print(f"ERROR: {cred_file} is a directory, not a file", file=sys.stderr)
+            exit(1)
+        conf_dir = cred_file.parent
+    conf_dir.mkdir(exist_ok=True, parents=True)
+
     if args.subcommand == "login":
-        dw = docuware.Client(args.url, verify_certificate=not args.ignore_certificate)
         try:
-            session = dw.login(
+            dw = docuware.connect(
+                url=args.url,
                 username=args.username,
                 password=args.password,
                 organization=args.organization,
-                oauth2=not args.cookie_auth,
+                verify_certificate=verify,
+                credentials_file=cred_file,
             )
-        except docuware.AccountError as exc:
+        except (docuware.AccountError, docuware.ResourceError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             exit(1)
-        else:
-            credentials = {
-                "username": args.username,
-                "password": args.password,
-                "url": args.url,
-            }
-            if args.organization:
-                credentials["organization"] = args.organization
-            with open(cred_file, "w") as f:
-                json.dump(credentials, f, indent=4)
-            with open(session_file, "w") as f:
-                json.dump(session, f)
+        print("Login successful", file=sys.stderr)
+        exit(0)
 
-            print("Login successful", file=sys.stderr)
-            exit(0)
-
-    if not cred_file.exists() or not session_file.exists():
+    if not cred_file.exists():
         print("Please log in first!", file=sys.stderr)
         exit(1)
 
-    with open(cred_file) as f:
-        credentials = json.load(f)
-    with open(session_file) as f:
-        session = json.load(f)
-
-    dw = docuware.Client(
-        credentials.get("url", "http://localhost"),
-        verify_certificate=not args.ignore_certificate,
-    )
     try:
-        session = dw.login(
-            username=credentials.get("username"),
-            password=credentials.get("password"),
-            organization=credentials.get("organization"),
-            saved_session=session,
+        dw = docuware.connect(
+            verify_certificate=verify,
+            credentials_file=cred_file,
         )
     except (docuware.AccountError, docuware.ResourceError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         exit(1)
-    else:
-        with open(session_file, "w") as f:
-            json.dump(session, f)
 
     return dw
 
@@ -566,5 +551,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-# vim: set et sw=4 ts=4:

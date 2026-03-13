@@ -231,6 +231,13 @@ class SearchQuery:
 
 
 class SearchResult:
+    """Paginated search result iterator.
+
+    Note: SearchResult is a single-use iterator. Once exhausted it cannot be
+    restarted. This is intentional: the result pages are fetched lazily from
+    the server and re-iteration would require a new search request.
+    """
+
     def __init__(self, config: Dict, query: SearchQuery):
         self.query = query
         self.count = config.get("Count", {}).get("Value", 0)
@@ -240,10 +247,10 @@ class SearchResult:
     def _items(self, config: Dict) -> Iterator[SearchResultItem]:
         return (SearchResultItem(item, self) for item in config.get("Items", []))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[SearchResultItem]:
         return self
 
-    def __next__(self):
+    def __next__(self) -> SearchResultItem:
         while (item := next(self.items, None)) is None:
             if "next" in self.endpoints:
                 result = self.query.dialog.client.conn.get_json(self.endpoints["next"])
@@ -281,6 +288,3 @@ class SearchResultItem:
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.title}' [{self.content_type}]"
-
-
-# vim: set et sw=4 ts=4:

@@ -4,11 +4,17 @@ import pathlib
 import random
 import re
 from datetime import date, datetime
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from docuware import errors
 
 DATE_PATTERN = re.compile(r"/Date\((\d+)\)/")
+
+
+def safe_str(value: Any) -> str:
+    """Generate a string whose value contains only printable characters.
+    This means that control characters, among others, are removed."""
+    return "".join(ch for ch in str(value) if ch.isprintable())
 
 
 def datetime_from_string(
@@ -28,7 +34,7 @@ def datetime_from_string(
                 unix_timestamp = msec / 1000
                 try:
                     dt = datetime.fromtimestamp(unix_timestamp)
-                except Exception:
+                except (OverflowError, OSError, ValueError):
                     return None
                 if auto_date:
                     if (
@@ -40,7 +46,7 @@ def datetime_from_string(
                         return date(dt.year, dt.month, dt.day)
                 return dt
             else:
-                # WTF: negative timestamps ... ?!
+                # DocuWare sometimes returns negative timestamps (pre-1970 dates); treat as missing
                 return None
         raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
     else:
@@ -62,7 +68,7 @@ def date_from_string(value: str) -> Optional[date]:
                 unix_timestamp = msec / 1000
                 try:
                     dt = date.fromtimestamp(unix_timestamp)
-                except Exception:
+                except (OverflowError, OSError, ValueError):
                     dt = None
                 return dt
             else:
@@ -114,6 +120,3 @@ def random_password(length: int = 16) -> str:
             k=length,
         )
     )
-
-
-# vim: set et sw=4 ts=4:

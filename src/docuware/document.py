@@ -5,7 +5,7 @@ import mimetypes
 import pathlib
 from typing import IO, Any, Dict, Optional, Tuple, Union
 
-from docuware import fields, structs, types, utils
+from docuware import errors, fields, structs, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +22,11 @@ class Document:
         self.endpoints = structs.Endpoints(config)
         self.attachments = [DocumentAttachment(s, self) for s in config.get("Sections", [])]
         self.fields = [fields.FieldValue.from_config(f) for f in config.get("Fields", [])]
+        self._deleted: bool = False
+
+    def _assert_alive(self) -> None:
+        if self._deleted:
+            raise errors.DataError(f"Document {self.id!r} has already been deleted")
 
     @property
     def client(self) -> types.DocuwareClientP:
@@ -43,9 +48,11 @@ class Document:
         )
 
     def thumbnail(self) -> Tuple[bytes, str, str]:
+        self._assert_alive()
         return self.client.conn.get_bytes(self.endpoints["thumbnail"])
 
     def download(self, keep_annotations: bool = True) -> Tuple[bytes, str, str]:
+        self._assert_alive()
         return Document._download(
             self.client,
             self.endpoints["fileDownload"],
@@ -53,33 +60,25 @@ class Document:
         )
 
     def download_all(self) -> Tuple[bytes, str, str]:
+        self._assert_alive()
         return self.client.conn.get_bytes(self.endpoints["downloadAsArchive"])
 
-    def delete(self):
+    def delete(self) -> None:
+        self._assert_alive()
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         try:
             _ = self.client.conn.delete(self.endpoints["self"], headers=headers)
         except Exception as exc:
             log.debug("Unable to delete document %s: %s", self, exc)
-            raise  # FIXME: specific exception
+            raise
         else:
-            self.id = None
-            self.endpoints = structs.Endpoints({})
+            self._deleted = True
 
     def update(self, fields: Dict[str, Any]) -> Document:
+        self._assert_alive()
         json_fields = []
         for key, value in fields.items():
-            type_name = "String"
-            if isinstance(value, bool):
-                type_name = "Bool"
-            elif isinstance(value, int):
-                type_name = "Int"
-            elif isinstance(value, float):
-                type_name = "Decimal"
-            elif hasattr(value, "isoformat"):  # datetime or date
-                type_name = "DateTime"
-                value = value.isoformat()
-
+            type_name, value = structs.python_to_dw_field(value)
             json_fields.append({"FieldName": key, "Item": value, "ItemElementName": type_name})
 
         data = {"Field": json_fields}
@@ -104,6 +103,7 @@ class Document:
     def upload_attachment(
         self, file: Union[pathlib.Path, str, IO[bytes]]
     ) -> DocumentAttachment:
+        self._assert_alive()
         endpoint = self.endpoints.get(
             "files"
         )  # "files" or "sections"? usually "postFile" or "files"
@@ -133,7 +133,7 @@ class Document:
             if hasattr(file, "name"):
                 filename = pathlib.Path(file.name).name
                 mime_type, _ = mimetypes.guess_type(filename)
-                mime_type = mime_type or mime_type
+                mime_type = mime_type or "application/octet-stream"
 
         try:
             # Prepare multipart upload
@@ -157,7 +157,7 @@ class Document:
                     new_att = DocumentAttachment(data, self)
                     self.attachments.append(new_att)
                     return new_att
-            except Exception:
+            except ValueError:
                 pass
 
             # If parsing failed or different response, just return a dummy or reload
