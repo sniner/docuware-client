@@ -73,7 +73,7 @@ jobs:
           uv pip install pyinstaller
 
       - name: Build EXEs with PyInstaller
-        run: uv run pyinstaller --onefile --name dw-client docuware/cli/dw.py
+        run: uv run pyinstaller --onefile --name dw-client src/docuware/cli/dw.py
 
       - name: Upload Error Logs (if failed to build)
         if: failure()
