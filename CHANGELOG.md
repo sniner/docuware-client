@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-03-14
+
+### Added
+
+- **`Dialog.is_default`**: exposes the `IsDefault` flag from the API response.
+  `FileCabinet.search_dialog()` without a key now prefers the default dialog
+  over the first in the list.
+- **`Dialog.associated_dialog_id` / `Dialog.associated_dialog`**: expose the
+  `AssignedDialogId` relationship from the API — navigates from a `SearchDialog`
+  to its `ResultListDialog` and from there to the `InfoDialog` without an extra
+  HTTP call.
+- **`InfoDialog`** and **`ResultTree`**: new subclasses of `Dialog` so that
+  `isinstance` checks work for all dialog types. Both are exported from the
+  top-level package.
+- **`StoreDialog.fields`**: lazy-loads and caches the index fields of a store
+  dialog, enabling field discovery before calling `FileCabinet.create_document()`.
+
+### Changed
+
+- **`Dialog.name`** falls back to `Id` when `DisplayName` is absent or empty
+  (`DisplayName` is optional in the XSD, `Id` is required).
+- **`Dialog._load()` / `_on_loaded()`**: the duplicated lazy-loading logic from
+  `SearchDialog` and `TaskListDialog` is now a single implementation in the `Dialog`
+  base class, with an `_on_loaded(config)` hook for subclass-specific
+  post-load work (Template Method pattern).
+- **`dialogExpressionLink` workaround** moved from `SearchQuery.__init__` into
+  `SearchDialog._on_loaded()`, keeping the API-bug fix close to where the
+  dialog config is processed rather than inside the query class.
+- **`FileCabinet.dialogs`** filter: the `"_" not in Id` heuristic that excludes
+  mobile/internal dialog copies is now documented with a comment explaining the
+  rationale. Also guards against a missing `Id` key.
+
+### Fixed
+
+- `FileCabinet.search_dialog()` previously used a generator that could only be
+  consumed once; it now uses a list, which also enables the `IsDefault` check.
+
 ## [0.7.0] - 2026-03-13
 
 ### Breaking changes

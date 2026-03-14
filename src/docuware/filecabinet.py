@@ -13,6 +13,7 @@ class FileCabinet:
         self.organization = organization
         self.name = config.get("Name", "")
         self.id = config.get("Id", "")
+        self.is_basket: bool = bool(config.get("IsBasket", False))
         self.endpoints = structs.Endpoints(config)
         self._dialogs: Optional[List[types.DialogP]] = None
 
@@ -23,8 +24,9 @@ class FileCabinet:
             self._dialogs = [
                 dialogs.Dialog.from_config(dlg, self)
                 for dlg in result.get("Dialog", [])
-                if dlg.get("$type") == "DialogInfo" and ("_" not in dlg.get("Id"))
-                # and (dlg.get("IsDefault") or dlg.get("IsForMobile"))
+                # Only DialogInfo entries are user-facing dialogs. IDs containing "_"
+                # are mobile-specific or internal system copies; skip them.
+                if dlg.get("$type") == "DialogInfo" and "_" not in dlg.get("Id", "")
             ]
         return self._dialogs or []
 
@@ -52,18 +54,16 @@ class FileCabinet:
     def search_dialog(
         self, key: Optional[str] = None, *, required: bool = False
     ) -> Optional[types.SearchDialogP]:
-        # TODO: Is there a default search dialog?
-        search_dlgs = (dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog))
+        search_dlgs = [dlg for dlg in self.dialogs if isinstance(dlg, dialogs.SearchDialog)]
         if key:
-            return structs.first_item_by_id_or_name(
-                search_dlgs,
-                key,
-                required=required,
-            )
-        else:
-            return structs.first_item_by_class(
-                search_dlgs, dialogs.SearchDialog, required=required
-            )
+            return structs.first_item_by_id_or_name(search_dlgs, key, required=required)
+        # Prefer the dialog marked IsDefault; fall back to the first available one
+        result = next((dlg for dlg in search_dlgs if dlg.is_default), None) or (
+            search_dlgs[0] if search_dlgs else None
+        )
+        if result is None and required:
+            raise KeyError("SearchDialog")
+        return result
 
     def create_document(
         self,
@@ -92,3 +92,7 @@ class FileCabinet:
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.name}' [{self.id}]"
+
+
+class Basket(FileCabinet):
+    """A DocuWare basket. Thin subclass of FileCabinet for type distinction."""

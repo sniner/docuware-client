@@ -1,8 +1,11 @@
 import unittest
+from unittest.mock import MagicMock
 
 import httpx
 
-from docuware import DocuwareClient
+from docuware import Basket, DocuwareClient, FileCabinet
+from docuware.organization import Organization
+from docuware.types import DocuwareClientP
 
 
 class TestFileCabinetOperations(unittest.TestCase):
@@ -30,8 +33,6 @@ class TestFileCabinetOperations(unittest.TestCase):
         self.client.login("user", "pass")
 
     def test_create_document(self):
-        from unittest.mock import MagicMock
-
         from docuware.filecabinet import FileCabinet
         from docuware.types import OrganizationP
 
@@ -54,6 +55,60 @@ class TestFileCabinetOperations(unittest.TestCase):
         doc = fc.create_document(fields={"COMPANY": "ACME"})
         self.assertEqual(doc.id, "123")
         self.assertEqual(doc.title, "Test Doc")
+
+
+class TestBasketSeparation(unittest.TestCase):
+    def _make_org(self, fc_response):
+        mock_client = MagicMock(spec=DocuwareClientP)
+        mock_conn = MagicMock()
+        mock_client.conn = mock_conn
+        mock_conn.get_json.return_value = fc_response
+        org = Organization(
+            {"Name": "TestOrg", "Id": "org1", "Links": [{"rel": "filecabinets", "href": "/fc"}]},
+            mock_client,
+        )
+        return org
+
+    def test_file_cabinets_excludes_baskets(self):
+        org = self._make_org({
+            "FileCabinet": [
+                {"Id": "fc1", "Name": "Archive", "IsBasket": False, "Links": []},
+                {"Id": "bk1", "Name": "Inbox", "IsBasket": True, "Links": []},
+            ]
+        })
+        self.assertEqual(len(org.file_cabinets), 1)
+        self.assertEqual(org.file_cabinets[0].id, "fc1")
+
+    def test_baskets_returns_only_baskets(self):
+        org = self._make_org({
+            "FileCabinet": [
+                {"Id": "fc1", "Name": "Archive", "IsBasket": False, "Links": []},
+                {"Id": "bk1", "Name": "Inbox", "IsBasket": True, "Links": []},
+            ]
+        })
+        self.assertEqual(len(org.baskets), 1)
+        self.assertIsInstance(org.baskets[0], Basket)
+        self.assertTrue(org.baskets[0].is_basket)
+        self.assertEqual(org.baskets[0].id, "bk1")
+
+    def test_basket_is_instance_of_filecabinet(self):
+        org = self._make_org({
+            "FileCabinet": [
+                {"Id": "bk1", "Name": "Inbox", "IsBasket": True, "Links": []},
+            ]
+        })
+        self.assertIsInstance(org.baskets[0], FileCabinet)
+
+    def test_api_called_once_for_both(self):
+        org = self._make_org({
+            "FileCabinet": [
+                {"Id": "fc1", "Name": "Archive", "IsBasket": False, "Links": []},
+                {"Id": "bk1", "Name": "Inbox", "IsBasket": True, "Links": []},
+            ]
+        })
+        _ = org.file_cabinets
+        _ = org.baskets
+        org.client.conn.get_json.assert_called_once()
 
 
 if __name__ == "__main__":

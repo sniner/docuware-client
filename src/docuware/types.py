@@ -222,6 +222,9 @@ class OrganizationP(IdNameP, Protocol):
     def conn(self) -> ConnectionP: ...
 
     @property
+    def all_cabinets(self) -> List[FileCabinetP]: ...
+
+    @property
     def file_cabinets(self) -> List[FileCabinetP]: ...
 
     @overload
@@ -233,6 +236,24 @@ class OrganizationP(IdNameP, Protocol):
     ) -> Optional[FileCabinetP]: ...
 
     def file_cabinet(
+        self,
+        key: str,
+        *,
+        required: bool = False,
+    ) -> Optional[FileCabinetP]: ...
+
+    @property
+    def baskets(self) -> List[FileCabinetP]: ...
+
+    @overload
+    def basket(self, key: str, *, required: Literal[True]) -> FileCabinetP: ...
+
+    @overload
+    def basket(
+        self, key: str, *, required: Literal[False] = False
+    ) -> Optional[FileCabinetP]: ...
+
+    def basket(
         self,
         key: str,
         *,
@@ -253,6 +274,9 @@ class OrganizationP(IdNameP, Protocol):
 
 
 class FileCabinetP(IdNameP, Protocol):
+    @property
+    def is_basket(self) -> bool: ...
+
     @property
     def organization(self) -> OrganizationP: ...
 

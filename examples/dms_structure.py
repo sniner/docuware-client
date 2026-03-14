@@ -37,7 +37,13 @@ def main():
         for fc in org.file_cabinets:
             print(f"  - File Cabinet: {fc.name} ({fc.id})")
             for dlg in fc.dialogs:
-                print(f"    - Search Dialog: {dlg.name} ({dlg.id})")
+                print(f"    - Dialog: {dlg.name} ({dlg.id})")
+                for fld in dlg.fields.values():
+                    print(f"      - {fld.name}: {fld.type} ({fld.id})")
+        for basket in org.baskets:
+            print(f"  - Basket: {basket.name} ({basket.id})")
+            for dlg in basket.dialogs:
+                print(f"    - Dialog: {dlg.name} ({dlg.id})")
                 for fld in dlg.fields.values():
                     print(f"      - {fld.name}: {fld.type} ({fld.id})")
 

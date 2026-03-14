@@ -1,5 +1,5 @@
 from docuware.client import DocuwareClient, connect
-from docuware.dialogs import SearchDialog
+from docuware.dialogs import InfoDialog, ResultTree, SearchDialog
 from docuware.errors import (
     AccountError,
     ApiError,
@@ -11,7 +11,7 @@ from docuware.errors import (
     SearchConditionError,
     UserOrGroupError,
 )
-from docuware.filecabinet import FileCabinet
+from docuware.filecabinet import Basket, FileCabinet
 from docuware.organization import Organization
 from docuware.users import (
     Group,
@@ -28,14 +28,17 @@ Client = DocuwareClient
 __all__ = [
     "AccountError",
     "ApiError",
+    "Basket",
     "Client",
     "DataError",
     "DocuwareClientException",
     "DocuwareClient",
     "FileCabinet",
     "Group",
+    "InfoDialog",
     "InternalError",
     "Organization",
+    "ResultTree",
     "ResourceError",
     "ResourceNotFoundError",
     "SearchConditionError",

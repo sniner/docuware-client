@@ -175,7 +175,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     def get_first_search_dlg(name: str) -> Optional[docuware.SearchDialog]:
         name = name.casefold()
         for org in dw.organizations:
-            for fc in org.file_cabinets:
+            for fc in org.all_cabinets:
                 if fc.name.casefold() == name:
                     for dlg in fc.dialogs:
                         if isinstance(dlg, docuware.SearchDialog):
@@ -313,7 +313,7 @@ def parse_fields_arg(args: List[str]) -> Dict[str, Any]:
 def get_file_cabinet(dw: docuware.Client, name: str) -> Optional[docuware.FileCabinet]:
     name = name.casefold()
     for org in dw.organizations:
-        for fc in org.file_cabinets:
+        for fc in org.all_cabinets:
             if fc.name.casefold() == name:
                 # TODO: We need to return concrete FileCabinet or verify it is one
                 return fc  # type: ignore
@@ -431,7 +431,7 @@ def list_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
 
     def show_org(org: types.OrganizationP) -> None:
         print(org)
-        for fc in org.file_cabinets:
+        for fc in org.all_cabinets:
             show_filecabinet(fc)
 
     for org in dw.organizations:
@@ -483,7 +483,7 @@ def connect(args: argparse.Namespace) -> docuware.Client:
     else:
         if cred_file.is_dir():
             print(f"ERROR: {cred_file} is a directory, not a file", file=sys.stderr)
-            exit(1)
+            sys.exit(1)
         conf_dir = cred_file.parent
     conf_dir.mkdir(exist_ok=True, parents=True)
 
@@ -499,13 +499,13 @@ def connect(args: argparse.Namespace) -> docuware.Client:
             )
         except (docuware.AccountError, docuware.ResourceError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
-            exit(1)
+            sys.exit(1)
         print("Login successful", file=sys.stderr)
-        exit(0)
+        sys.exit(0)
 
     if not cred_file.exists():
         print("Please log in first!", file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
     try:
         dw = docuware.connect(
@@ -514,7 +514,7 @@ def connect(args: argparse.Namespace) -> docuware.Client:
         )
     except (docuware.AccountError, docuware.ResourceError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
-        exit(1)
+        sys.exit(1)
 
     return dw
 
@@ -546,7 +546,7 @@ def main() -> None:
     except KeyboardInterrupt:
         code = 255
 
-    exit(code if code else 0)
+    sys.exit(code if code else 0)
 
 
 if __name__ == "__main__":

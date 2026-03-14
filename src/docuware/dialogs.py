@@ -17,10 +17,14 @@ class Dialog:
     def __init__(self, config: Dict, file_cabinet: types.FileCabinetP):
         self.file_cabinet = file_cabinet
         self.client = file_cabinet.organization.client
-        self.name = config.get("DisplayName", "")
+        # DisplayName is optional in the XSD; fall back to Id so name is never empty
+        self.name = config.get("DisplayName") or config.get("Id", "")
         self.type = config.get("Type")
         self.id = config.get("Id", "")
+        self.is_default: bool = bool(config.get("IsDefault", False))
+        self.associated_dialog_id: str = config.get("AssignedDialogId", "")
         self.endpoints = structs.Endpoints(config)
+        self._fields: Optional[Dict[str, types.SearchFieldP]] = None
 
     @staticmethod
     def from_config(config: Dict, file_cabinet: types.FileCabinetP) -> Dialog:
@@ -33,7 +37,30 @@ class Dialog:
             return ResultListDialog(config, file_cabinet)
         elif dlg_type == "TaskList":
             return TaskListDialog(config, file_cabinet)
+        elif dlg_type == "InfoDialog":
+            return InfoDialog(config, file_cabinet)
+        elif dlg_type == "ResultTree":
+            return ResultTree(config, file_cabinet)
         return Dialog(config, file_cabinet)
+
+    def _load(self) -> None:
+        """Fetch the full dialog config and populate fields. Results are cached."""
+        if self._fields is not None:
+            return
+        config = self.client.conn.get_json(self.endpoints["self"])
+        self._fields = {
+            f.id: f for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
+        }
+        self._on_loaded(config)
+
+    def _on_loaded(self, config: Dict) -> None:
+        """Hook called after _load() populates fields. Override in subclasses."""
+
+    @property
+    def associated_dialog(self) -> Optional[types.DialogP]:
+        if not self.associated_dialog_id:
+            return None
+        return self.file_cabinet.dialog(self.associated_dialog_id)
 
     @property
     def fields(self) -> Dict[str, types.SearchFieldP]:
@@ -44,25 +71,25 @@ class Dialog:
 
 
 class StoreDialog(Dialog):
-    pass
+    @property
+    def fields(self) -> Dict[str, types.SearchFieldP]:
+        self._load()
+        return self._fields or {}
 
 
 class ResultListDialog(Dialog):
     pass
 
 
+class InfoDialog(Dialog):
+    pass
+
+
+class ResultTree(Dialog):
+    pass
+
+
 class TaskListDialog(Dialog):
-    def __init__(self, config: Dict, file_cabinet: types.FileCabinetP):
-        super().__init__(config, file_cabinet)
-        self._fields: Optional[Dict[str, types.SearchFieldP]] = None
-
-    def _load(self):
-        if self._fields is None:
-            config = self.client.conn.get_json(self.endpoints["self"])
-            self._fields = {
-                f.id: f for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
-            }
-
     @property
     def fields(self) -> Dict[str, types.SearchFieldP]:
         self._load()
@@ -72,16 +99,32 @@ class TaskListDialog(Dialog):
 class SearchDialog(Dialog):
     def __init__(self, config: Dict, file_cabinet: types.FileCabinetP):
         super().__init__(config, file_cabinet)
-        self._fields: Optional[Dict[str, types.SearchFieldP]] = None
+        self._query: Optional[SearchQuery] = None
 
-    def _load(self):
-        if self._fields is None:
-            config = self.client.conn.get_json(self.endpoints["self"])
-            self._fields = {
-                f.id: f for f in [SearchField(fld, self) for fld in config.get("Fields", [])]
-            }
-            # NB: SearchQuery depends on self.fields
-            self._query = SearchQuery(config.get("Query", {}), self)
+    def _on_loaded(self, config: Dict) -> None:
+        query_config = config.get("Query", {})
+        q_endpoints = structs.Endpoints(query_config)
+        if "dialogExpressionLink" not in q_endpoints:
+            # WTF: This endpoint is needed but not included in the response, instead there is
+            # a 'dialogExpression' endpoint that can be forged to:
+            #     /DocuWare/Platform/FileCabinets/<FC_ID>/Query/DialogExpressionLink?dialogId=<DLG_ID>
+            # Looks like a bug in DocuWare's API.
+            if "dialogExpression" in q_endpoints:
+                query_config.setdefault("Links", []).append(
+                    {
+                        "rel": "dialogExpressionLink",
+                        "href": re.sub(
+                            r"/DialogExpression\b",
+                            "/DialogExpressionLink",
+                            q_endpoints["dialogExpression"],
+                            flags=re.IGNORECASE,
+                        ),
+                    }
+                )
+            else:
+                raise errors.InternalError("Endpoint 'dialogExpression' missing")
+        # NB: SearchQuery depends on self.fields being populated first
+        self._query = SearchQuery(query_config, self)
 
     @property
     def fields(self) -> Dict[str, types.SearchFieldP]:
@@ -92,6 +135,7 @@ class SearchDialog(Dialog):
         self, conditions: types.SearchConditionsT, operation: Optional[str] = None
     ) -> SearchResult:
         self._load()
+        assert self._query is not None
         return self._query.search(conditions=conditions, operation=operation)
 
 
@@ -185,20 +229,6 @@ class SearchQuery:
         self.endpoints = structs.Endpoints(config)
         # self.fields = {f:dialog.fields.get(f) for f in config.get("Fields", [])}
         self.cond_parser = ConditionParser(self.dialog)
-        if "dialogExpressionLink" not in self.endpoints:
-            # WTF: This endpoint is needed but not included in the response, instead there is
-            # a 'dialogExpression' endpoint that can be forged to:
-            #     /DocuWare/Platform/FileCabinets/<FC_ID>/Query/DialogExpressionLink?dialogId=<DLG_ID>
-            # Looks like a bug in DocuWare's API.
-            if "dialogExpression" in self.endpoints:
-                self.endpoints["dialogExpressionLink"] = re.sub(
-                    r"/DialogExpression\b",
-                    "/DialogExpressionLink",
-                    self.endpoints["dialogExpression"],
-                    flags=re.IGNORECASE,
-                )
-            else:
-                raise errors.InternalError("Endpoint 'dialogExpression' missing")
 
     @property
     def conn(self) -> types.ConnectionP:

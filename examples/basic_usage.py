@@ -39,8 +39,8 @@ def main():
 
     print(f"Connected to {client.conn.base_url}")
 
-    # List all organizations and their file cabinets
-    print("\n--- Organizations & File Cabinets ---")
+    # List all organizations, their file cabinets and baskets
+    print("\n--- Organizations, File Cabinets & Baskets ---")
     first_org_id = ""
     for org in client.organizations:
         print(f"Organization: {org.name} ({org.id})")
@@ -48,6 +48,8 @@ def main():
             first_org_id = org.id
         for fc in org.file_cabinets:
             print(f"  - File Cabinet: {fc.name} ({fc.id})")
+        for basket in org.baskets:
+            print(f"  - Basket: {basket.name} ({basket.id})")
 
     # Work with a specific organization and file cabinet
     # Update these IDs/Names to match your system!

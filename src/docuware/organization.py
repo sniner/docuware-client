@@ -16,20 +16,28 @@ class Organization:
         self.endpoints = structs.Endpoints(config)
         self._info: Optional[cidict.CaseInsensitiveDict] = None
         self._dialogs: Optional[Sequence[types.DialogP]] = None
-        self._file_cabinets: Optional[List[types.FileCabinetP]] = None
+        self._all_cabinets: Optional[List[types.FileCabinetP]] = None
 
     @property
     def conn(self) -> types.ConnectionP:
         return self.client.conn
 
+    def _ensure_cabinets(self) -> List[types.FileCabinetP]:
+        if self._all_cabinets is None:
+            result = self.client.conn.get_json(self.endpoints["filecabinets"])
+            self._all_cabinets = [
+                filecabinet.Basket(fc, self) if fc.get("IsBasket") else filecabinet.FileCabinet(fc, self)
+                for fc in result.get("FileCabinet", [])
+            ]
+        return self._all_cabinets
+
+    @property
+    def all_cabinets(self) -> List[types.FileCabinetP]:
+        return self._ensure_cabinets()
+
     @property
     def file_cabinets(self) -> List[types.FileCabinetP]:
-        if self._file_cabinets is None:
-            result = self.client.conn.get_json(self.endpoints["filecabinets"])
-            self._file_cabinets = [
-                filecabinet.FileCabinet(fc, self) for fc in result.get("FileCabinet", [])
-            ]
-        return self._file_cabinets
+        return [fc for fc in self._ensure_cabinets() if not fc.is_basket]
 
     @overload
     def file_cabinet(self, key: str, *, required: Literal[True]) -> types.FileCabinetP: ...
@@ -43,6 +51,21 @@ class Organization:
         return structs.first_item_by_id_or_name(self.file_cabinets, key, required=required)
 
     @property
+    def baskets(self) -> List[types.FileCabinetP]:
+        return [fc for fc in self._ensure_cabinets() if fc.is_basket]
+
+    @overload
+    def basket(self, key: str, *, required: Literal[True]) -> types.FileCabinetP: ...
+
+    @overload
+    def basket(
+        self, key: str, *, required: Literal[False] = False
+    ) -> Optional[types.FileCabinetP]: ...
+
+    def basket(self, key: str, *, required: bool = False) -> Optional[types.FileCabinetP]:
+        return structs.first_item_by_id_or_name(self.baskets, key, required=required)
+
+    @property
     def my_tasks(self) -> Sequence:
         # Sorry, but couldn't figure out how to get "My tasks" list.
         raise NotImplementedError
@@ -53,7 +76,7 @@ class Organization:
     def dialogs(self) -> Sequence[types.DialogP]:
         # It is unclear whether the dialogs here differ from those of FileCabinet or not.
         if self._dialogs is None:
-            fc_by_id = {fc.id: fc for fc in self.file_cabinets}
+            fc_by_id = {fc.id: fc for fc in self._ensure_cabinets()}
             result = self.client.conn.get_json(self.endpoints["dialogs"])
             self._dialogs = [
                 dialogs.Dialog.from_config(dlg, fc_by_id[dlg.get("FileCabinetId")])

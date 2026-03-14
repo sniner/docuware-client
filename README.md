@@ -1,12 +1,12 @@
 # docuware-client
 
 This is a client library for the REST API of [DocuWare][1] DMS. Since
-[DocuWare's documentation][2] regarding the REST API is very sparse (at the
-time these lines were written), this client serves only a part of the API's
-functionality.
+DocuWare provides no official developer documentation for the REST API beyond
+XSD schema files, this client covers only a part of the API's functionality.
 
-Please keep in mind: **This software is not related to DocuWare.** It is a work
-in progress, may yield unexpected results, and almost certainly contains bugs.
+Please keep in mind: **This is an independent project with no affiliation to
+DocuWare GmbH.** It is a work in progress, may yield unexpected results, and
+almost certainly contains bugs.
 
 > **Breaking change in 0.7.0 — OAuth2 only**
 >
@@ -48,13 +48,15 @@ dw = docuware.Client("http://localhost")
 dw.login("username", "password", "organization")
 ```
 
-Iterate over the organizations and file cabinets:
+Iterate over the organizations and file cabinets and baskets:
 
 ```python
 for org in dw.organizations:
     print(org)
     for fc in org.file_cabinets:
         print("   ", fc)
+    for b in org.baskets:
+        print("   ", b)
 ```
 
 If you already know the ID or name of the objects, you can also access them
@@ -63,8 +65,9 @@ directly.
 ```python
 org = dw.organization("1")
 fc = org.file_cabinet("Archive")
-# If you only know the ID:
-doc = fc.get_document(123456)
+basket = org.basket("Inbox")
+# If you know the ID:
+doc = fc.get_document("123456")
 ```
 
 Now some examples of how to search for documents. First you need a search
@@ -213,12 +216,14 @@ Of course, `--help` will give you a list of all options:
 $ dw-client --help
 ```
 
-Some search examples (Bash shell syntax):
+Some search examples (Bash shell syntax). The `--file-cabinet` option accepts
+both file cabinet names and basket names:
 
 ```console
 $ dw-client search --file-cabinet Archive Customer=Foo\*
 $ dw-client search --file-cabinet Archive DocNo=123456 "DocType=Invoice \\(incoming\\)"
 $ dw-client search --file-cabinet Archive DocDate=2022-02-14
+$ dw-client search --file-cabinet Inbox DocDate=2022-02-14
 ```
 
 Downloading documents:
@@ -276,16 +281,17 @@ Some information about your DocuWare installation:
 $ dw-client info
 ```
 
-Listing all organizations, file cabinets and dialogs at once:
+Listing all organizations, file cabinets, baskets and dialogs at once:
 
 ```console
 $ dw-client list
 ```
 
-A more specific list, only one file cabinet:
+A more specific list, only one file cabinet or basket (by name):
 
 ```console
 $ dw-client list --file-cabinet Archive
+$ dw-client list --file-cabinet Inbox
 ```
 
 You can also display a (partial) selection of the contents of individual fields:
