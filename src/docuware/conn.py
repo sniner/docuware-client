@@ -14,6 +14,14 @@ from docuware import cijson, errors, parser, types
 log = logging.getLogger(__name__)
 
 
+def _server_message(resp: httpx.Response) -> Optional[str]:
+    """Extract DocuWare's 'Message' field from a JSON error response, if present."""
+    try:
+        return resp.json().get("Message") or None
+    except Exception:
+        return None
+
+
 DEFAULT_HEADERS = {
     "User-Agent": "Python docuware-client",
 }
@@ -210,10 +218,12 @@ class Connection(types.ConnectionP):
         )
         if resp.status_code == 200:
             return resp
+        msg = _server_message(resp)
         raise errors.ResourceError(
-            f"POST request failed with code {resp.status_code}",
+            f"POST {resp.status_code}" + (f": {msg}" if msg else ""),
             url=url,
             status_code=resp.status_code,
+            server_message=msg,
         )
 
     def post_json(
@@ -256,10 +266,12 @@ class Connection(types.ConnectionP):
         )
         if resp.status_code == 200:
             return resp
+        msg = _server_message(resp)
         raise errors.ResourceError(
-            f"PUT request failed with code {resp.status_code} and message '{resp.content}'",
+            f"PUT {resp.status_code}" + (f": {msg}" if msg else ""),
             url=url,
             status_code=resp.status_code,
+            server_message=msg,
         )
 
     def put_json(
@@ -300,10 +312,12 @@ class Connection(types.ConnectionP):
         )
         if resp.status_code == 200:
             return resp
+        msg = _server_message(resp)
         raise errors.ResourceError(
-            f"GET request failed with code {resp.status_code}",
+            f"GET {resp.status_code}" + (f": {msg}" if msg else ""),
             url=url,
             status_code=resp.status_code,
+            server_message=msg,
         )
 
     def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any:
@@ -330,10 +344,12 @@ class Connection(types.ConnectionP):
         )
         if resp.status_code == 200:
             return resp
+        msg = _server_message(resp)
         raise errors.ResourceError(
-            f"DELETE request failed with code {resp.status_code}",
+            f"DELETE {resp.status_code}" + (f": {msg}" if msg else ""),
             url=url,
             status_code=resp.status_code,
+            server_message=msg,
         )
 
     def get_bytes(
@@ -366,8 +382,10 @@ class Connection(types.ConnectionP):
                 content_type,
                 content_disposition.get("filename") or "unknown.bin",
             )
+        msg = _server_message(resp)
         raise errors.ResourceNotFoundError(
-            f"Download failed, code {resp.status_code}",
+            f"Download failed {resp.status_code}" + (f": {msg}" if msg else ""),
             url=url,
             status_code=resp.status_code,
+            server_message=msg,
         )

@@ -1,16 +1,55 @@
 from __future__ import annotations
 
+import enum
 import logging
 import re
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from docuware import document, errors, fields, parser, structs, types, utils
 
 log = logging.getLogger(__name__)
 
-AND = "And"
-OR = "Or"
+class Operation(enum.Enum):
+    """Logical operator that combines multiple search conditions."""
+
+    AND = "And"
+    """All conditions must match (default)."""
+
+    OR = "Or"
+    """At least one condition must match."""
+
+
+class QuoteMode(enum.Enum):
+    """Controls automatic escaping of DocuWare search metacharacters in field values.
+
+    When using the dict form of :meth:`SearchDialog.search`, field values may
+    contain characters that DocuWare interprets as query operators (e.g. ``(``,
+    ``)``, ``*``, ``?``).  ``QuoteMode`` selects which characters are
+    automatically escaped with a backslash before the query is sent to the API.
+
+    The escaping is **idempotent**: values that already contain backslash-escaped
+    sequences (e.g. ``\\(`` from an earlier workaround) are left unchanged.
+    """
+
+    NONE = "none"
+    """No automatic escaping."""
+
+    PARTIAL = "partial"
+    """Escape ``(`` and ``)`` only.  Wildcard characters ``*`` and ``?`` are
+    preserved so they can still be used for pattern matching.  This is the
+    default."""
+
+    ALL = "all"
+    """Escape ``(``, ``)``, ``*``, and ``?``.  Use this when wildcard
+    characters must be treated as literals."""
+
+
+_QUOTE_CHARS: Dict[QuoteMode, frozenset] = {
+    QuoteMode.NONE: frozenset(),
+    QuoteMode.PARTIAL: frozenset("()"),
+    QuoteMode.ALL: frozenset("()?*"),
+}
 
 
 class Dialog:
@@ -132,11 +171,14 @@ class SearchDialog(Dialog):
         return self._fields or {}
 
     def search(
-        self, conditions: types.SearchConditionsT, operation: Optional[str] = None
+        self,
+        conditions: types.SearchConditionsT,
+        operation: Optional[Union[str, Operation]] = None,
+        quote: QuoteMode = QuoteMode.PARTIAL,
     ) -> SearchResult:
         self._load()
         assert self._query is not None
-        return self._query.search(conditions=conditions, operation=operation)
+        return self._query.search(conditions=conditions, operation=operation, quote=quote)
 
 
 class SearchField:
@@ -170,14 +212,12 @@ class ConditionParser:
             self.fields_by_id[field.id.casefold()] = field
 
     @staticmethod
-    def convert_field_value(value: Any) -> str:
+    def convert_field_value(value: Any, quote: QuoteMode = QuoteMode.NONE) -> str:
         if value is None:
-            return "*"
+            return "EMPTY()"
         if isinstance(value, date):
-            value = datetime(value.year, value.month, value.day)
-        if isinstance(value, datetime):
-            value = utils.datetime_to_string(value)
-        return str(value)
+            return value.isoformat()
+        return utils.quote_value(str(value), _QUOTE_CHARS[quote])
 
     def field_by_name(self, name: str) -> types.SearchFieldP:
         iname = name.casefold()
@@ -189,15 +229,14 @@ class ConditionParser:
             raise errors.SearchConditionError(f"Unknown field: {name}")
         return field
 
-    def _term(self, name: str, value: Union[str, List[str]]) -> Tuple[str, List[str]]:
+    def _term(
+        self, name: str, value: Union[str, List[str]], quote: QuoteMode = QuoteMode.NONE
+    ) -> Tuple[str, List[str]]:
         field = self.field_by_name(name)
-        if isinstance(value, str):
-            value = [value]
+        if isinstance(value, list):
+            value = [self.convert_field_value(v, quote) for v in value]
         else:
-            try:
-                value = [self.convert_field_value(i) for i in value]
-            except TypeError:
-                value = [str(value)]
+            value = [self.convert_field_value(value, quote)]
         return field.id, value
 
     def parse_list(
@@ -206,17 +245,19 @@ class ConditionParser:
         return [self._term(*parser.parse_search_condition(c)) for c in conditions]
 
     def parse_dict(
-        self, conditions: Dict[str, Union[str, List[str]]]
+        self, conditions: Dict[str, Union[str, List[str]]], quote: QuoteMode = QuoteMode.PARTIAL
     ) -> List[Tuple[str, List[str]]]:
-        return [self._term(k, v) for k, v in conditions.items()]
+        return [self._term(k, v, quote) for k, v in conditions.items()]
 
-    def parse(self, conditions: types.SearchConditionsT) -> List[Tuple[str, List[str]]]:
+    def parse(
+        self, conditions: types.SearchConditionsT, quote: QuoteMode = QuoteMode.PARTIAL
+    ) -> List[Tuple[str, List[str]]]:
         if isinstance(conditions, str):
             return self.parse_list([conditions])
         elif isinstance(conditions, (list, tuple)):
             return self.parse_list(conditions)
         else:
-            return self.parse_dict(conditions)
+            return self.parse_dict(conditions, quote)
 
 
 class SearchQuery:
@@ -237,20 +278,22 @@ class SearchQuery:
     def search(
         self,
         conditions: types.SearchConditionsT,
-        operation: Optional[str] = None,
+        operation: Optional[Union[str, Operation]] = None,
         sort_field: Optional[str] = None,
         sort_order: Optional[str] = None,
+        quote: QuoteMode = QuoteMode.PARTIAL,
     ) -> SearchResult:
-        terms = self.cond_parser.parse(conditions)
+        terms = self.cond_parser.parse(conditions, quote=quote)
         query = {"fields": ",".join([t[0] for t in terms])}
         if sort_field:
             query["sortOrder"] = (
                 f"{self.cond_parser.field_by_name(sort_field).id} {sort_order if sort_order else 'Asc'}"
             )
         path = self.conn.make_path(self.endpoints["dialogExpressionLink"], query=query)
+        op = operation.value if isinstance(operation, Operation) else (operation or Operation.AND.value)
         data = {
             "Condition": [{"DBName": k, "Value": v} for k, v in terms],
-            "Operation": operation or AND,
+            "Operation": op,
         }
         result_url = self.conn.post_text(path, json=data).split("\n", 1)[0]
         result = self.conn.get_json(result_url)

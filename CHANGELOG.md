@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-03-14
+
+### Added
+
+- **`QuoteMode`** enum and **`quote_value()`** utility exported from the top-level
+  package.
+- **`SearchDialog.search()` / `SearchQuery.search()`**: new `quote` parameter
+  (`QuoteMode.PARTIAL` by default) that automatically escapes DocuWare
+  metacharacters in field values when using the dict form. `PARTIAL` escapes
+  `(` and `)` while preserving wildcard characters `*` and `?`; `ALL` also
+  escapes wildcards; `NONE` disables automatic escaping. The escaping is
+  idempotent — existing workarounds with manually pre-escaped values continue
+  to work unchanged.
+
+### Fixed
+
+- **`ConditionParser`**: `date` and `datetime` values in dict-form search
+  conditions now produce ISO 8601 strings (`"2024-03-15"` /
+  `"2024-03-15T12:00:00"`) instead of `/Date(ms)/`. DocuWare accepts
+  `/Date(ms)/` only in its own responses, not as search input — passing it
+  as a condition value caused a 422 Unprocessable Entity error.
+- **`ConditionParser`**: passing `None` as a single dict value previously
+  fell through to `str(None)` = `"None"`. It now correctly produces `EMPTY()`
+  (search for documents where the field is empty), consistent with `None`
+  inside a list.
+- **`ConditionParser.convert_field_value(None)`**: returns `EMPTY()` instead
+  of `*` to correctly express an empty-field search rather than a wildcard.
+- **Error messages**: `conn.get()` and `conn.post()` now include the server's
+  response body (up to 500 characters) in the exception message, making 4xx
+  errors much easier to diagnose.
+
 ## [0.7.1] - 2026-03-14
 
 ### Added

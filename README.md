@@ -99,18 +99,49 @@ Let's search for some documents:
 for result in dlg.search("DOCNO=123456"):
     print(result)
 # Search for two patterns alternatively:
-for result in dlg.search(["DOCNO=123456", "DOCNO=654321"], operation=docuware.OR):
+for result in dlg.search(["DOCNO=123456", "DOCNO=654321"], operation=docuware.Operation.OR):
     print(result)
 # Search for documents in a date range (01-31 January 2023):
 for result in dlg.search("DWSTOREDATETIME=2023-01-01T00:00:00,2023-02-01T00:00:00"):
     print(result)
 ```
 
-Please note that search terms may also contain metacharacters such as `*`, `(`,
-`)`, which may need to be escaped when searching for these characters
-themselves.
+DocuWare search values may contain metacharacters such as `(`, `)`, `*`, and
+`?`. When using the **dict form**, parentheses are automatically escaped by
+default so that literal values just work:
 
 ```python
+# Parentheses are escaped automatically — no 422 error:
+for result in dlg.search({"DOCTYPE": "Invoice (incoming)"}):
+    print(result)
+```
+
+The escaping behaviour is controlled by the `quote` parameter
+(`QuoteMode.PARTIAL` by default):
+
+- **`QuoteMode.PARTIAL`** *(default)*: escapes `(` and `)`, but leaves
+  wildcard characters `*` and `?` intact.
+- **`QuoteMode.ALL`**: also escapes `*` and `?` when they must be treated as
+  literals.
+- **`QuoteMode.NONE`**: no automatic escaping — use when you need full control
+  over the value syntax.
+
+```python
+import docuware
+
+dlg.search({"NAME": "Müller*"})                           # wildcard preserved
+dlg.search({"NAME": "50%"}, quote=docuware.QuoteMode.NONE)     # no escaping
+dlg.search({"NAME": "a*b"}, quote=docuware.QuoteMode.ALL)      # * escaped
+```
+
+Passing `None` as a field value searches for documents where that field is
+empty (`EMPTY()`).
+
+The **string and list forms** are raw condition strings — escaping is the
+caller's responsibility:
+
+```python
+# Manual escaping required in string/list form:
 for result in dlg.search("DOCTYPE=Invoice \\(incoming\\)"):
     print(result)
 ```
@@ -121,6 +152,27 @@ The following two queries are equivalent:
 ```python
 dlg.search(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"])
 dlg.search({"FIELD1": ["TERM1", "TERM2"], "FIELD2": ["TERM3"]})
+```
+
+When a field value is a **list of two elements**, DocuWare interprets it as a
+**range search** (`TERM1 ≤ field ≤ TERM2`). The first value must be less than
+or equal to the second. This applies to all field types — dates, numbers, and
+strings alike. `date` and `datetime` objects are converted to ISO 8601
+automatically:
+
+```python
+from datetime import date
+# Documents with DOCDATE in January 2023:
+dlg.search({"DOCDATE": [date(2023, 1, 1), date(2023, 1, 31)]})
+# Documents with CUSTOMERNO between 1000 and 2000:
+dlg.search({"CUSTOMERNO": [1000, 2000]})
+```
+
+To match a field against a set of **discrete values**, use separate conditions
+with `operation=docuware.Operation.OR`:
+
+```python
+dlg.search(["CUSTOMERNO=1234", "CUSTOMERNO=5678"], operation=docuware.Operation.OR)
 ```
 
 The result of a search is always an iterator over the search results, even if

@@ -1,21 +1,8 @@
 import logging
-import os
-import pathlib
 import sys
 
 import docuware
-from docuware import connect
-
-
-def default_credentials_file() -> pathlib.Path:
-    default_path = pathlib.Path(".credentials")
-    if default_path.exists():
-        return default_path
-    base = os.environ.get("XDG_CONFIG_HOME")
-    if base:
-        return pathlib.Path(base) / "docuware-client" / default_path.name
-    return pathlib.Path.home() / ".docuware-client.cred"
-
+from docuware import connect, default_credentials_file
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logging.getLogger("httpx").setLevel(logging.WARNING)

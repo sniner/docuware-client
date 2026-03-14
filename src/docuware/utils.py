@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import pathlib
 import random
 import re
@@ -9,6 +10,38 @@ from typing import Any, Optional, Union
 from docuware import errors
 
 DATE_PATTERN = re.compile(r"/Date\((\d+)\)/")
+
+
+def quote_value(s: str, chars: frozenset) -> str:
+    """Idempotently escape special characters in a DocuWare search value.
+
+    Already-escaped sequences (backslash followed by any character) are passed
+    through unchanged, so calling this function on an already-escaped string is
+    safe and produces the same result.
+
+    :param s: The value string to escape.
+    :param chars: Set of characters to escape with a backslash.
+    :return: The escaped string.
+    """
+    if not chars:
+        return s
+    result = []
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == "\\" and i + 1 < len(s):
+            # Already-escaped sequence: pass both characters through unchanged
+            result.append(ch)
+            result.append(s[i + 1])
+            i += 2
+        elif ch in chars:
+            result.append("\\")
+            result.append(ch)
+            i += 1
+        else:
+            result.append(ch)
+            i += 1
+    return "".join(result)
 
 
 def safe_str(value: Any) -> str:
@@ -104,6 +137,16 @@ def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
             raise errors.InternalError(f"Unable to create file {path}: too many duplicates")
         candidate = pathlib.Path(f"{stem}({n}){suffix}")
     return candidate
+
+
+def default_credentials_file() -> pathlib.Path:
+    default_path = pathlib.Path(".credentials")
+    if default_path.exists():
+        return default_path
+    conf_dir = os.environ.get("XDG_CONFIG_HOME")
+    if conf_dir:
+        return pathlib.Path(conf_dir) / "docuware-client" / default_path.name
+    return pathlib.Path.home() / ".docuware-client.cred"
 
 
 def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> pathlib.Path:

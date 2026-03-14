@@ -1,6 +1,6 @@
 [project]
 name = "docuware-client"
-version = "0.7.1"
+version = "0.7.2"
 description = "DocuWare REST-API client"
 authors = [{ name = "Stefan Schönberger", email = "stefan@sniner.dev" }]
 requires-python = ">=3.9"
@@ -8,7 +8,6 @@ readme = "README.md"
 license = "BSD-3-Clause"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

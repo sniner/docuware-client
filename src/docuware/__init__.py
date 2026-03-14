@@ -1,5 +1,5 @@
 from docuware.client import DocuwareClient, connect
-from docuware.dialogs import InfoDialog, ResultTree, SearchDialog
+from docuware.dialogs import InfoDialog, Operation, QuoteMode, ResultTree, SearchDialog
 from docuware.errors import (
     AccountError,
     ApiError,
@@ -18,6 +18,8 @@ from docuware.users import (
     User,
 )
 from docuware.utils import (
+    default_credentials_file,
+    quote_value,
     random_password,
     unique_filename,
     write_binary_file,
@@ -37,7 +39,9 @@ __all__ = [
     "Group",
     "InfoDialog",
     "InternalError",
+    "Operation",
     "Organization",
+    "QuoteMode",
     "ResultTree",
     "ResourceError",
     "ResourceNotFoundError",
@@ -46,6 +50,8 @@ __all__ = [
     "User",
     "UserOrGroupError",
     "connect",
+    "default_credentials_file",
+    "quote_value",
     "random_password",
     "unique_filename",
     "write_binary_file",
