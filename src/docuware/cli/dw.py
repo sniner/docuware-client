@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import pathlib
 import sys
 from typing import Any, Dict, List, Optional
@@ -472,20 +471,11 @@ def connect(args: argparse.Namespace) -> docuware.Client:
     verify = not args.ignore_certificate
     cred_file = args.credentials_file
     if cred_file is None:
-        base_dir = os.environ.get("XDG_CONFIG_HOME")
-        if base_dir:
-            conf_dir = pathlib.Path(base_dir) / "docuware-client"
-            cred_file = conf_dir / ".credentials"
-        else:
-            base_dir = os.environ.get("HOME", ".")
-            conf_dir = pathlib.Path(base_dir)
-            cred_file = conf_dir / ".docuware-client.cred"
-    else:
-        if cred_file.is_dir():
-            print(f"ERROR: {cred_file} is a directory, not a file", file=sys.stderr)
-            sys.exit(1)
-        conf_dir = cred_file.parent
-    conf_dir.mkdir(exist_ok=True, parents=True)
+        cred_file = docuware.default_credentials_file()
+    elif cred_file.is_dir():
+        print(f"ERROR: {cred_file} is a directory, not a file", file=sys.stderr)
+        sys.exit(1)
+    cred_file.parent.mkdir(exist_ok=True, parents=True)
 
     if args.subcommand == "login":
         try:

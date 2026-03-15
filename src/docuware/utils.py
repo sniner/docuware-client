@@ -50,8 +50,25 @@ def safe_str(value: Any) -> str:
     return "".join(ch for ch in str(value) if ch.isprintable())
 
 
+def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
+    """Parse DocuWare /Date(msec)/ into datetime (local time), or None."""
+    if not value:
+        return None
+    if m := DATE_PATTERN.match(str(value)):
+        msec = int(m[1])
+        if msec > 0:
+            try:
+                return datetime.fromtimestamp(msec / 1000)
+            except (OverflowError, OSError, ValueError):
+                return None
+        # DocuWare sometimes returns negative timestamps (pre-1970 dates); treat as missing
+        return None
+    raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
+
+
 def datetime_from_string(
-    value: Optional[str], auto_date: bool = False
+    value: Optional[str],
+    auto_date: bool = False,
 ) -> Union[date, datetime, None]:
     """
     NB: Dates earlier than 1970 and later than 2038 break the code, and not just
@@ -60,33 +77,15 @@ def datetime_from_string(
     those corrupted documents and inform the owner so they can be fixed. For
     example: 3023-01-01
     """
-    if value:
-        if m := DATE_PATTERN.match(str(value)):
-            msec = int(m[1])
-            if msec > 0:
-                unix_timestamp = msec / 1000
-                try:
-                    dt = datetime.fromtimestamp(unix_timestamp)
-                except (OverflowError, OSError, ValueError):
-                    return None
-                if auto_date:
-                    if (
-                        dt.hour == 0
-                        and dt.minute == 0
-                        and dt.second == 0
-                        and dt.microsecond == 0
-                    ):
-                        return date(dt.year, dt.month, dt.day)
-                return dt
-            else:
-                # DocuWare sometimes returns negative timestamps (pre-1970 dates); treat as missing
-                return None
-        raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
-    else:
+    dt = _parse_timestamp(value)
+    if dt is None:
         return None
+    if auto_date and not any([dt.hour, dt.minute, dt.second, dt.microsecond]):
+        return dt.date()
+    return dt
 
 
-def date_from_string(value: str) -> Optional[date]:
+def date_from_string(value: Optional[str]) -> Optional[date]:
     """
     NB: Dates earlier than 1970 and later than 2038 break the code, and not just
     for the document with the incorrect date entry, but also for all remaining
@@ -94,29 +93,19 @@ def date_from_string(value: str) -> Optional[date]:
     those corrupted documents and inform the owner so they can be fixed. For
     example: 3023-01-01
     """
-    if value:
-        if m := DATE_PATTERN.match(str(value)):
-            msec = int(m[1])
-            if msec > 0:
-                unix_timestamp = msec / 1000
-                try:
-                    dt = date.fromtimestamp(unix_timestamp)
-                except (OverflowError, OSError, ValueError):
-                    dt = None
-                return dt
-            else:
-                return None
-        raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
-    else:
-        return None
+    dt = _parse_timestamp(value)
+    return dt.date() if dt is not None else None
 
 
 def datetime_to_string(value: datetime) -> str:
-    return f"/Date({int(value.timestamp()) * 1000})/"
+    return f"/Date({int(value.timestamp() * 1000)})/"
 
 
 def date_to_string(value: date) -> str:
     return datetime_to_string(datetime(value.year, value.month, value.day))
+
+
+UNIQUE_FILENAME_LIMIT: int = 1000
 
 
 def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
@@ -133,19 +122,24 @@ def unique_filename(path: Union[str, pathlib.Path]) -> pathlib.Path:
     candidate = path
     while candidate.exists():
         n += 1
-        if n > 1000:
+        if n > UNIQUE_FILENAME_LIMIT:
             raise errors.InternalError(f"Unable to create file {path}: too many duplicates")
         candidate = pathlib.Path(f"{stem}({n}){suffix}")
     return candidate
 
 
 def default_credentials_file() -> pathlib.Path:
-    default_path = pathlib.Path(".credentials")
-    if default_path.exists():
-        return default_path
-    conf_dir = os.environ.get("XDG_CONFIG_HOME")
-    if conf_dir:
-        return pathlib.Path(conf_dir) / "docuware-client" / default_path.name
+    local_path = pathlib.Path(".credentials")
+    if local_path.exists():
+        return local_path
+    xdg_env = os.environ.get("XDG_CONFIG_HOME")
+    xdg_config = pathlib.Path(xdg_env) if xdg_env else None
+    if xdg_config is None:
+        xdg_default = pathlib.Path.home() / ".config"
+        if xdg_default.is_dir():
+            xdg_config = xdg_default
+    if xdg_config is not None:
+        return xdg_config / "docuware-client" / ".credentials"
     return pathlib.Path.home() / ".docuware-client.cred"
 
 

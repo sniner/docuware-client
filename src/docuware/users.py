@@ -121,7 +121,7 @@ class User:
                 ("DBName", self.db_name),
                 ("Active", self.active),
             ]
-            if item[1]
+            if item[1] is not None and item[1] != ""
         }
         if overrides:
             return {**d, **overrides}

@@ -1,6 +1,6 @@
 [project]
 name = "docuware-client"
-version = "0.7.2"
+version = "0.7.3"
 description = "DocuWare REST-API client"
 authors = [{ name = "Stefan Schönberger", email = "stefan@sniner.dev" }]
 requires-python = ">=3.9"
@@ -29,6 +29,7 @@ dev = [
     "pytest>=8.2.2,<9",
     "basedpyright>=1.38.2,<2",
     "ruff>=0.15.5,<0.16",
+    "pytest-cov>=7.0.0",
 ]
 
 [tool.uv]
@@ -44,6 +45,7 @@ module-name = "docuware"
 [tool.pytest.ini_options]
 addopts = "-ra -q"
 testpaths = ["tests"]
+norecursedirs = ["integration"]
 
 [tool.pyright]
 typeCheckingMode = "standard"

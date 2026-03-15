@@ -4,6 +4,7 @@
 /.vscode/
 /.session
 /.credentials
+/.coverage
 /build
 /dist
 /prod

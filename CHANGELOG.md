@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-03-15
+
+### Fixed
+
+- **`datetime_to_string()`**: operator precedence bug caused sub-second precision
+  to always be truncated to zero milliseconds. `int(value.timestamp()) * 1000`
+  is now `int(value.timestamp() * 1000)`. In practice DocuWare uses integer
+  seconds, so this had no observable effect, but the implementation was formally
+  wrong.
+- **`User.as_dict()`**: the truthiness filter `if item[1]` incorrectly excluded
+  `Active=False` from the returned dict, making it impossible to represent an
+  explicitly inactive user without using `overrides`. Fixed to
+  `if item[1] is not None and item[1] != ""`.
+- **`default_credentials_file()`**: now respects `~/.config` as the XDG default
+  config directory when `$XDG_CONFIG_HOME` is not set (previously fell back
+  directly to `~/.docuware-client.cred`). Behaviour unchanged for systems where
+  `~/.config` does not exist.
+
+### Tests
+
+- Unit-test suite significantly expanded; library code (excluding CLI) now at
+  ~92% coverage.
+- Integration tests moved to `tests/integration/` and excluded from the default
+  `pytest` run.
+
 ## [0.7.2] - 2026-03-14
 
 ### Added

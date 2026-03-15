@@ -111,5 +111,58 @@ class TestBasketSeparation(unittest.TestCase):
         org.client.conn.get_json.assert_called_once()
 
 
+class TestGetDocument(unittest.TestCase):
+    def setUp(self):
+        self.client = DocuwareClient("https://example.com")
+
+        def handler(request: httpx.Request):
+            if request.url.path == "/DocuWare/Platform/Home/IdentityServiceInfo":
+                return httpx.Response(200, json={"IdentityServiceUrl": "https://example.com/DocuWare/Identity"})
+            elif request.url.path == "/DocuWare/Identity/.well-known/openid-configuration":
+                return httpx.Response(200, json={"token_endpoint": "/DocuWare/Identity/connect/token"})
+            elif request.url.path == "/DocuWare/Identity/connect/token":
+                return httpx.Response(200, json={"access_token": "mock_token"})
+            elif request.url.path == "/DocuWare/Platform":
+                return httpx.Response(200, json={"Links": [], "Resources": [], "Version": "7.10"})
+            elif request.url.path == "/DocuWare/Platform/FileCabinets/fc1/Documents/42":
+                return httpx.Response(200, json={
+                    "Id": "42", "Title": "Found Doc",
+                    "Links": [{"rel": "self",
+                               "href": "/DocuWare/Platform/FileCabinets/fc1/Documents/42"}],
+                })
+            return httpx.Response(404)
+
+        self.client.conn.session = httpx.Client(transport=httpx.MockTransport(handler))
+        self.client.login("user", "pass")
+
+    def test_get_document_by_id(self):
+        from docuware.filecabinet import FileCabinet
+        from docuware.types import OrganizationP
+
+        mock_org = MagicMock(spec=OrganizationP)
+        mock_org.client = self.client
+        fc = FileCabinet({
+            "Id": "fc1",
+            "Links": [{"rel": "documents",
+                       "href": "/DocuWare/Platform/FileCabinets/fc1/Documents"}],
+        }, mock_org)
+        doc = fc.get_document("42")
+        self.assertEqual(doc.id, "42")
+        self.assertEqual(doc.title, "Found Doc")
+
+
+class TestFileCabinetStr(unittest.TestCase):
+    def test_file_cabinet_str(self):
+        from docuware.filecabinet import FileCabinet
+        from docuware.types import OrganizationP
+
+        mock_org = MagicMock(spec=OrganizationP)
+        mock_org.client = MagicMock()
+        fc = FileCabinet({"Id": "fc1", "Name": "Archive"}, mock_org)
+        s = str(fc)
+        self.assertIn("Archive", s)
+        self.assertIn("fc1", s)
+
+
 if __name__ == "__main__":
     unittest.main()
