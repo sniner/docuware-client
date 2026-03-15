@@ -1,190 +1,117 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.7.3] - 2026-03-15
 
 ### Fixed
 
-- **`datetime_to_string()`**: operator precedence bug caused sub-second precision
-  to always be truncated to zero milliseconds. `int(value.timestamp()) * 1000`
-  is now `int(value.timestamp() * 1000)`. In practice DocuWare uses integer
-  seconds, so this had no observable effect, but the implementation was formally
-  wrong.
-- **`User.as_dict()`**: the truthiness filter `if item[1]` incorrectly excluded
-  `Active=False` from the returned dict, making it impossible to represent an
-  explicitly inactive user without using `overrides`. Fixed to
-  `if item[1] is not None and item[1] != ""`.
+- **`datetime_to_string()`**: millisecond precision was silently lost due to an
+  operator precedence bug. Unobservable in practice (DocuWare uses integer seconds),
+  but the output was formally incorrect
+- **`User.as_dict()`**: `Active=False` was incorrectly dropped from the result,
+  making it impossible to represent an explicitly inactive user without `overrides`
 - **`default_credentials_file()`**: now respects `~/.config` as the XDG default
-  config directory when `$XDG_CONFIG_HOME` is not set (previously fell back
-  directly to `~/.docuware-client.cred`). Behaviour unchanged for systems where
-  `~/.config` does not exist.
+  when `$XDG_CONFIG_HOME` is not set; falls back to `~/.docuware-client.cred`
+  only on systems where `~/.config` does not exist
 
 ### Tests
 
-- Unit-test suite significantly expanded; library code (excluding CLI) now at
-  ~92% coverage.
-- Integration tests moved to `tests/integration/` and excluded from the default
-  `pytest` run.
+- Library code (excluding CLI) now at ~92% coverage
 
 ## [0.7.2] - 2026-03-14
 
 ### Added
 
-- **`QuoteMode`** enum and **`quote_value()`** utility exported from the top-level
-  package.
+- **`QuoteMode`** enum and **`quote_value()`** exported from the top-level package
 - **`SearchDialog.search()` / `SearchQuery.search()`**: new `quote` parameter
-  (`QuoteMode.PARTIAL` by default) that automatically escapes DocuWare
-  metacharacters in field values when using the dict form. `PARTIAL` escapes
-  `(` and `)` while preserving wildcard characters `*` and `?`; `ALL` also
-  escapes wildcards; `NONE` disables automatic escaping. The escaping is
-  idempotent — existing workarounds with manually pre-escaped values continue
-  to work unchanged.
+  (`QuoteMode.PARTIAL` by default) that automatically escapes DocuWare metacharacters
+  `(` `)` in field values while preserving wildcards `*` `?`. Pass `QuoteMode.ALL`
+  to also escape wildcards, or `QuoteMode.NONE` to disable. Escaping is idempotent
 
 ### Fixed
 
-- **`ConditionParser`**: `date` and `datetime` values in dict-form search
-  conditions now produce ISO 8601 strings (`"2024-03-15"` /
-  `"2024-03-15T12:00:00"`) instead of `/Date(ms)/`. DocuWare accepts
-  `/Date(ms)/` only in its own responses, not as search input — passing it
-  as a condition value caused a 422 Unprocessable Entity error.
-- **`ConditionParser`**: passing `None` as a single dict value previously
-  fell through to `str(None)` = `"None"`. It now correctly produces `EMPTY()`
-  (search for documents where the field is empty), consistent with `None`
-  inside a list.
-- **`ConditionParser.convert_field_value(None)`**: returns `EMPTY()` instead
-  of `*` to correctly express an empty-field search rather than a wildcard.
-- **Error messages**: `conn.get()` and `conn.post()` now include the server's
-  response body (up to 500 characters) in the exception message, making 4xx
-  errors much easier to diagnose.
+- **Search conditions**: passing a `date`/`datetime` value in a dict-form condition
+  previously produced `/Date(ms)/`, which DocuWare rejects as search input with a
+  422 error. Values are now serialised as ISO 8601 strings
+- **Search conditions**: passing `None` as a field value now correctly produces
+  `EMPTY()` (search for documents where the field is empty) instead of the literal
+  string `"None"`
+- **Error messages**: 4xx/5xx responses now include the server's response body in
+  the exception message, making errors much easier to diagnose
 
 ## [0.7.1] - 2026-03-14
 
 ### Added
 
-- **`Dialog.is_default`**: exposes the `IsDefault` flag from the API response.
-  `FileCabinet.search_dialog()` without a key now prefers the default dialog
-  over the first in the list.
-- **`Dialog.associated_dialog_id` / `Dialog.associated_dialog`**: expose the
-  `AssignedDialogId` relationship from the API — navigates from a `SearchDialog`
-  to its `ResultListDialog` and from there to the `InfoDialog` without an extra
-  HTTP call.
-- **`InfoDialog`** and **`ResultTree`**: new subclasses of `Dialog` so that
-  `isinstance` checks work for all dialog types. Both are exported from the
-  top-level package.
-- **`StoreDialog.fields`**: lazy-loads and caches the index fields of a store
-  dialog, enabling field discovery before calling `FileCabinet.create_document()`.
-
-### Changed
-
-- **`Dialog.name`** falls back to `Id` when `DisplayName` is absent or empty
-  (`DisplayName` is optional in the XSD, `Id` is required).
-- **`Dialog._load()` / `_on_loaded()`**: the duplicated lazy-loading logic from
-  `SearchDialog` and `TaskListDialog` is now a single implementation in the `Dialog`
-  base class, with an `_on_loaded(config)` hook for subclass-specific
-  post-load work (Template Method pattern).
-- **`dialogExpressionLink` workaround** moved from `SearchQuery.__init__` into
-  `SearchDialog._on_loaded()`, keeping the API-bug fix close to where the
-  dialog config is processed rather than inside the query class.
-- **`FileCabinet.dialogs`** filter: the `"_" not in Id` heuristic that excludes
-  mobile/internal dialog copies is now documented with a comment explaining the
-  rationale. Also guards against a missing `Id` key.
+- **`FileCabinet.search_dialog()`**: without a key, now returns the dialog marked
+  as default in DocuWare instead of the first in the list
+- **`Dialog.associated_dialog`**: navigate from a `SearchDialog` to its
+  `ResultListDialog` and on to the `InfoDialog` without an extra HTTP call
+- **`InfoDialog`**, **`ResultTree`**: new `Dialog` subclasses exported from the
+  top-level package, enabling `isinstance` checks for all dialog types
+- **`StoreDialog.fields`**: enumerate the index fields of a store dialog before
+  calling `FileCabinet.create_document()`
 
 ### Fixed
 
-- `FileCabinet.search_dialog()` previously used a generator that could only be
-  consumed once; it now uses a list, which also enables the `IsDefault` check.
+- **`FileCabinet.search_dialog()`**: could not be called more than once reliably
 
 ## [0.7.0] - 2026-03-13
 
 ### Breaking changes
 
-- **Cookie authentication removed.** `CookieAuthenticator` and all related session
-  management code have been deleted. Only OAuth2 is supported from this version on.
-  OAuth2 requires DocuWare 7.10 or later. If you rely on cookie authentication,
-  stay on 0.6.x.
-- `.session` files are no longer created or used. Credentials are now stored as
-  JSON in a `.credentials` file.
+- **Cookie authentication removed.** Only OAuth2 is supported from this version
+  on; OAuth2 requires DocuWare 7.10 or later. If you rely on cookie authentication,
+  stay on 0.6.x
+- **`.session` files replaced.** Credentials are now stored as JSON in a
+  `.credentials` file; existing `.session` files are ignored
 
 ### Added
 
-- **`dwcontrol.py`**: new `ControlFile` class and `FieldType` enum for generating
-  `.dwcontrol` XML files used by the DocuWare Document Import service
-  (see KBA-34830, KBA-36502).
-- **`BearerAuth`**: dedicated `httpx.Auth` subclass for Bearer token injection,
-  replacing the previous ad-hoc header manipulation.
+- **`ControlFile`** / **`FieldType`**: generate `.dwcontrol` XML files for the
+  DocuWare Document Import service (see KBA-34830, KBA-36502)
 
 ### Changed
 
-- **Packaging**: migrated from Poetry to [uv](https://docs.astral.sh/uv/);
-  source tree restructured to `src/` layout (`src/docuware/`).
-- **Auth**: `OAuth2Authenticator.login()` now returns `None` instead of the
-  leftover `{"access_token": ...}` dict that was a relic of the cookie
-  authenticator.
-- **Error handling**: `_get_access_token()` always raises on failure instead of
-  silently returning `None`. An HTTP 400 response from the token endpoint is now
-  translated to `AccountError: Login failed: invalid username or password` for a
-  clear user-facing message.
-- **CLI**: credentials are now stored in
-  `$XDG_CONFIG_HOME/docuware-client/.credentials` (fallback:
-  `$HOME/.docuware-client.cred`). `--credentials-file` validates that the given
-  path is not a directory.
-- **Code cleanup**: removed dead code and simplified internals across `conn.py`,
-  `client.py`, `dialogs.py`, `document.py`, `filecabinet.py`, `organization.py`,
-  `parser.py`, `structs.py`, and `utils.py`.
-- **Tests**: mock handlers updated to simulate the full OAuth2 token flow
-  (IdentityServiceInfo → openid-configuration → token endpoint).
-- Updated GitHub Actions workflow for the new `src/` layout and uv.
-
-### Removed
-
-- `CookieAuthenticator` and all cookie/session-based login code.
-- `poetry.lock` (replaced by `uv.lock`).
+- **Login errors**: an invalid username or password now raises `AccountError` with
+  a clear message instead of a generic HTTP error
+- **CLI**: credentials stored at `$XDG_CONFIG_HOME/docuware-client/.credentials`
+  (fallback: `~/.docuware-client.cred`)
+- **Packaging**: migrated from Poetry to [uv](https://docs.astral.sh/uv/)
 
 ## [0.6.3] - 2026-03-07
 
 ### Added
 
-- **`__init__.py`**: explicit `__all__` for a stable, documented public API surface.
-- `Client` as a shorthand alias for `DocuwareClient`.
-
-### Changed
-
-- Updated dependencies.
+- **`Client`**: shorthand alias for `DocuwareClient`
+- Stable public API surface via explicit `__all__`
 
 ## [0.6.2] - 2026-02-21
 
-### Added
-- **CI**: Added GitHub actions workflow for running tests and building releases.
-
 ### Fixed
-- **CLI**: Fixed `get_file_cabinet` lookup so that file cabinets are correctly found in a case-insensitive manner.
+
+- **CLI**: file cabinet lookup is now case-insensitive
 
 ## [0.6.1] - 2026-02-18
 
 ### Added
-- **CLI**: added `create` command to create documents (optionally with file content) and set index fields.
-- **CLI**: added `update` command to modify index fields of existing documents.
-- **CLI**: added `attach` command to add files as attachments to documents.
-- **CLI**: added `detach` command to remove specific attachments.
-- **CLI**: added `get` command to retrieve documents by ID. Use `--attachment` (optionally with `--output`) to download content. Supports wildcard `*` for all attachments.
-- **API**: added `FileCabinet.create_document` to create a data record from index fields.
-- **API**: added `FileCabinet.get_document` to fetch a document by ID directly.
-- **API**: added `Document.update` to modify document fields.
-- **API**: added `Document.upload_attachment` and `DocumentAttachment.delete`.
 
-### Changed
-- Refactored `FileCabinet` to use clearer method names and removed broken legacy methods (`create_data_entry`, `update_data_entry`).
-- Improved `docuware.conn` to support `files` and `params` in request methods.
+- **CLI**: `create`, `update`, `attach`, `detach`, and `get` commands for
+  managing documents and attachments from the command line
+- **`FileCabinet.create_document()`**: create a data record from index fields
+- **`FileCabinet.get_document()`**: fetch a document by ID
+- **`Document.update()`**: modify document index fields
+- **`Document.upload_attachment()`** / **`DocumentAttachment.delete()`**:
+  manage document attachments
 
 ## [0.6.0] - 2026-02-16
 
 ### Changed
-- **Core**: Migrated entire HTTP layer from `requests` to `httpx` for better performance and async compatibility potential.
-- Updated `types.py` protocols to reflect `httpx` response types.
+
+- **HTTP layer**: migrated from `requests` to `httpx`
 
 ### Removed
-- Removed dependency on `requests`.
+
+- Dependency on `requests`
