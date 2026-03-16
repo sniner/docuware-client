@@ -6,7 +6,7 @@ import os
 import pathlib
 from typing import Any, Callable, Dict, Iterator, Optional, Union
 
-from docuware import conn, errors, organization, structs, types
+from docuware import auth, conn, errors, organization, structs, types
 
 log = logging.getLogger(__name__)
 
@@ -39,13 +39,13 @@ class DocuwareClient(types.DocuwareClientP):
         password: Optional[str],
         organization: Optional[str] = None,
     ) -> None:
-        auth = conn.OAuth2Authenticator(
+        authenticator = auth.OAuth2Authenticator(
             username=username,
             password=password,
             organization=organization,
         )
-        self.conn.authenticator = auth
-        auth.login(self.conn)
+        self.conn.authenticator = authenticator
+        authenticator.login(self.conn)
         res = self.conn.get_json("/DocuWare/Platform")
         self.endpoints = structs.Endpoints(res)
         self.resources = structs.Resources(res)
@@ -154,7 +154,7 @@ def connect_with_tokens(
         Connected DocuwareClient instance.
     """
     client = DocuwareClient(url, verify_certificate=verify_certificate)
-    auth = conn.TokenAuthenticator(
+    authenticator = auth.TokenAuthenticator(
         access_token=access_token,
         refresh_token=refresh_token,
         token_endpoint=token_endpoint,
@@ -163,8 +163,8 @@ def connect_with_tokens(
         verify=verify_certificate,
         on_token_refresh=on_token_refresh,
     )
-    client.conn.authenticator = auth
-    auth.login(client.conn)
+    client.conn.authenticator = authenticator
+    authenticator.login(client.conn)
     res = client.conn.get_json("/DocuWare/Platform")
     client.endpoints = structs.Endpoints(res)
     client.resources = structs.Resources(res)

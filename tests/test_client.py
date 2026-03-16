@@ -9,7 +9,7 @@ import pytest
 
 from docuware import DocuwareClient, errors
 from docuware.client import connect, connect_with_tokens
-from docuware.conn import TokenAuthenticator
+from docuware.auth import TokenAuthenticator
 
 BASE_URL = "https://example.com"
 

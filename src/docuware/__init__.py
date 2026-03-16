@@ -1,5 +1,5 @@
 from docuware.client import DocuwareClient, connect, connect_with_tokens
-from docuware.conn import TokenAuthenticator
+from docuware.auth import TokenAuthenticator
 from docuware.dialogs import InfoDialog, Operation, QuoteMode, ResultTree, SearchDialog
 from docuware.errors import (
     AccountError,

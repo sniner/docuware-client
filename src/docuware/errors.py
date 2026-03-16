@@ -2,6 +2,18 @@ from __future__ import annotations
 
 from typing import Optional
 
+__all__ = [
+    "DocuwareClientException",
+    "AccountError",
+    "DataError",
+    "InternalError",
+    "ApiError",
+    "SearchConditionError",
+    "ResourceError",
+    "ResourceNotFoundError",
+    "UserOrGroupError",
+]
+
 
 class DocuwareClientException(Exception):
     def __init__(

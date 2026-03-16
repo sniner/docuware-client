@@ -6,7 +6,8 @@ import pytest
 import httpx
 
 from docuware import errors
-from docuware.conn import BearerAuth, Connection, OAuth2Authenticator, TokenAuthenticator
+from docuware.auth import BearerAuth, OAuth2Authenticator, TokenAuthenticator
+from docuware.conn import Connection
 
 BASE = "https://dw.example.com"
 
@@ -356,7 +357,7 @@ def test_token_auth_logoff_clears_auth():
     assert c.session.auth is None
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_refreshes_token(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
@@ -387,7 +388,7 @@ def test_token_auth_authenticate_refreshes_token(mock_post):
     )
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_keeps_old_refresh_if_not_rotated(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
@@ -406,7 +407,7 @@ def test_token_auth_authenticate_keeps_old_refresh_if_not_rotated(mock_post):
     assert auth.refresh_token == "rt_initial"  # unchanged
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_calls_on_token_refresh_callback(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
@@ -440,7 +441,7 @@ def test_token_auth_authenticate_calls_on_token_refresh_callback(mock_post):
     assert callback_data["refresh_token"] == "rt_new"
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_400_raises_account_error(mock_post):
     mock_resp = MagicMock(status_code=400)
     mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -454,7 +455,7 @@ def test_token_auth_authenticate_400_raises_account_error(mock_post):
         auth.authenticate(c)
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_500_raises_http_error(mock_post):
     mock_resp = MagicMock(status_code=500)
     mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -468,7 +469,7 @@ def test_token_auth_authenticate_500_raises_http_error(mock_post):
         auth.authenticate(c)
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_sends_client_secret(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
@@ -505,7 +506,7 @@ def test_token_auth_authenticate_sends_client_secret(mock_post):
     )
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_omits_client_secret_when_empty(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
@@ -527,7 +528,7 @@ def test_token_auth_authenticate_omits_client_secret_when_empty(mock_post):
     assert "client_secret" not in called_data
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_missing_access_token_raises_account_error(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
@@ -540,7 +541,7 @@ def test_token_auth_authenticate_missing_access_token_raises_account_error(mock_
         auth.authenticate(c)
 
 
-@patch("docuware.conn.httpx.post")
+@patch("docuware.auth.httpx.post")
 def test_token_auth_authenticate_passes_verify_false(mock_post):
     mock_post.return_value = MagicMock(
         status_code=200,
