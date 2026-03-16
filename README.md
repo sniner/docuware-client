@@ -247,6 +247,35 @@ org.users.add(user, password="123456")
 ```
 
 
+## OAuth2 / PKCE authentication
+
+If your application handles the OAuth2 login itself — for example via the
+Authorization Code + PKCE flow — you can connect with externally obtained tokens
+using `connect_with_tokens()`:
+
+```python
+import docuware
+
+dw = docuware.connect_with_tokens(
+    url="https://acme.docuware.cloud/DocuWare/Platform",
+    access_token="...",
+    refresh_token="...",
+    token_endpoint="https://acme.docuware.cloud/DocuWare/Identity/connect/token",
+    client_id="your-client-id",
+    on_token_refresh=lambda tokens: save_tokens(tokens),  # optional: persist rotated tokens
+)
+```
+
+The `docuware.oauth` module provides two helpers for the PKCE flow itself:
+`discover_oauth_endpoints()` resolves the authorization and token endpoints from
+a DocuWare instance, and `exchange_pkce_code()` exchanges the authorization code
+for tokens.
+
+See [`examples/oauth2_login.py`](examples/oauth2_login.py) for a complete
+reference implementation including browser launch, local callback server, and
+CSRF state verification.
+
+
 ## CLI usage
 
 This package also includes a simple CLI program for collecting information

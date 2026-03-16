@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-03-16
+
+### Added
+
+- **`connect_with_tokens()`**: new entry point for applications that obtain OAuth2 tokens
+  externally (e.g. via PKCE). Accepts an access token and a refresh token; the client
+  refreshes automatically on 401/403. An optional `on_token_refresh` callback lets callers
+  persist rotated tokens
+- **`TokenAuthenticator`**: the authenticator backing `connect_with_tokens()`, also available
+  directly for custom connection setups
+- **`docuware.oauth`** module — two helpers for implementing the Authorization Code + PKCE flow:
+  - **`discover_oauth_endpoints()`**: resolves the authorization and token endpoints from a
+    DocuWare instance via OpenID Connect discovery
+  - **`exchange_pkce_code()`**: exchanges an authorization code for tokens
+- **`examples/oauth2_login.py`**: complete reference implementation of a PKCE login flow,
+  including browser launch, local callback server, and CSRF state verification
+
 ## [0.7.3] - 2026-03-15
 
 ### Fixed
