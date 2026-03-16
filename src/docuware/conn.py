@@ -173,7 +173,7 @@ class TokenAuthenticator(Authenticator):
         client_id: str,
         client_secret: str = "",
         verify: bool = True,
-        on_token_refresh: Optional[Callable[[Dict], None]] = None,
+        on_token_refresh: Optional[Callable[[Dict[str, Any]], None]] = None,
     ):
         self.access_token = access_token
         self.refresh_token = refresh_token

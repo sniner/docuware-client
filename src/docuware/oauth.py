@@ -17,6 +17,13 @@ from typing import Any, Dict
 
 import httpx
 
+from docuware import errors
+
+__all__ = [
+    "discover_oauth_endpoints",
+    "exchange_pkce_code",
+]
+
 
 def discover_oauth_endpoints(
     docuware_url: str,
@@ -110,7 +117,8 @@ def exchange_pkce_code(
         Token response dict with at least ``access_token`` and ``refresh_token``.
 
     Raises:
-        httpx.HTTPStatusError: If the token endpoint returns an error response.
+        errors.AccountError: If the token endpoint returns HTTP 400 (invalid/expired code).
+        httpx.HTTPStatusError: If the token endpoint returns any other error response.
     """
     resp = httpx.post(
         token_endpoint,
@@ -124,5 +132,12 @@ def exchange_pkce_code(
         timeout=15,
         verify=verify,
     )
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 400:
+            raise errors.AccountError(
+                "Authorization code exchange failed — code may be invalid or expired"
+            ) from exc
+        raise
     return resp.json()

@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 import httpx
 import pytest
 
+from docuware import errors
 from docuware.oauth import discover_oauth_endpoints, exchange_pkce_code
 
 DW_URL = "https://acme.docuware.cloud/DocuWare/Platform"
@@ -204,11 +205,29 @@ def test_exchange_passes_verify_false():
     assert mock_post.call_args.kwargs.get("verify") is False
 
 
-def test_exchange_raises_on_error():
+def test_exchange_raises_account_error_on_400():
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 400
     mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
         "bad request", request=MagicMock(), response=mock_resp
+    )
+
+    with patch("docuware.oauth.httpx.post", return_value=mock_resp):
+        with pytest.raises(errors.AccountError):
+            exchange_pkce_code(
+                code="bad",
+                code_verifier="v",
+                redirect_uri="http://localhost/cb",
+                token_endpoint=TOKEN_EP,
+                client_id="cid",
+            )
+
+
+def test_exchange_raises_http_error_on_500():
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 500
+    mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "server error", request=MagicMock(), response=mock_resp
     )
 
     with patch("docuware.oauth.httpx.post", return_value=mock_resp):
