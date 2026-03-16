@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import pathlib
-from typing import Iterator, Optional, Union
+from typing import Any, Callable, Dict, Iterator, Optional, Union
 
 from docuware import conn, errors, organization, structs, types
 
@@ -115,4 +115,58 @@ def connect(
             except OSError as exc:
                 log.warning("Failed to save credentials to %s: %s", credentials_file, exc)
 
+    return client
+
+
+def connect_with_tokens(
+    url: str,
+    access_token: str,
+    refresh_token: str,
+    token_endpoint: str,
+    client_id: str,
+    *,
+    client_secret: str = "",
+    on_token_refresh: Optional[Callable[[Dict[str, Any]], None]] = None,
+    verify_certificate: bool = True,
+) -> DocuwareClient:
+    """Connect to DocuWare using an existing OAuth2 access+refresh token pair.
+
+    Intended for applications that handle the OAuth2 login flow themselves
+    (e.g. PKCE) and obtain tokens externally.  The client will automatically
+    refresh the access token on 401/403 using the refresh token.
+
+    Note: this function does *not* call :func:`~docuware.oauth.discover_oauth_endpoints`
+    — the caller must resolve the token_endpoint beforehand.
+
+    Args:
+        url:              DocuWare Platform base URL.
+        access_token:     OAuth2 access token.
+        refresh_token:    OAuth2 refresh token.
+        token_endpoint:   Token endpoint URL (from OpenID Connect discovery).
+        client_id:        OAuth2 client ID.
+        client_secret:    OAuth2 client secret — required for confidential clients
+                          (web apps), empty for public/native clients (default).
+        on_token_refresh: Optional callback(tokens: dict) called after each
+                          successful token refresh — use it to persist new tokens.
+        verify_certificate: Whether to verify TLS certificates (default True).
+
+    Returns:
+        Connected DocuwareClient instance.
+    """
+    client = DocuwareClient(url, verify_certificate=verify_certificate)
+    auth = conn.TokenAuthenticator(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_endpoint=token_endpoint,
+        client_id=client_id,
+        client_secret=client_secret,
+        verify=verify_certificate,
+        on_token_refresh=on_token_refresh,
+    )
+    client.conn.authenticator = auth
+    auth.login(client.conn)
+    res = client.conn.get_json("/DocuWare/Platform")
+    client.endpoints = structs.Endpoints(res)
+    client.resources = structs.Resources(res)
+    client.version = res.get("Version")
     return client
