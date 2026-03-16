@@ -5,7 +5,7 @@ import logging
 import urllib.parse as urlparse
 from abc import ABC, abstractmethod
 from collections.abc import Generator
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import httpx
 
@@ -104,7 +104,9 @@ class OAuth2Authenticator(Authenticator):
         res = self._get(conn, "/DocuWare/Platform/Home/IdentityServiceInfo")
 
         # Step 2: Get Identity Service Configuration
-        path = f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+        path = (
+            f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+        )
         res = self._get(conn, path)
 
         # Step 3: Obtain an Access Token
@@ -142,6 +144,83 @@ class OAuth2Authenticator(Authenticator):
             # so we can only discard the token locally.
             self.token = None
             self._apply_access_token(conn, None)
+
+
+class TokenAuthenticator(Authenticator):
+    """Authenticator for an existing OAuth2 access+refresh token pair (e.g. from PKCE flow).
+
+    login()        — sets the Bearer header; no network call needed.
+    authenticate() — called automatically on 401/403; does a refresh_token grant.
+
+    Args:
+        access_token:     Initial OAuth2 access token.
+        refresh_token:    OAuth2 refresh token used to obtain new access tokens.
+        token_endpoint:   Full URL of the OAuth2 token endpoint.
+        client_id:        OAuth2 client ID (public client / native app).
+        client_secret:    OAuth2 client secret — required for confidential clients
+                          (web apps), empty for public/native clients.
+        verify:           Whether to verify TLS certificates on the refresh request
+                          (default True).  Set to False for on-prem self-signed certs.
+        on_token_refresh: Optional callback invoked after a successful refresh with
+                          the raw token response dict.  Use it to persist the new tokens.
+    """
+
+    def __init__(
+        self,
+        access_token: str,
+        refresh_token: str,
+        token_endpoint: str,
+        client_id: str,
+        client_secret: str = "",
+        verify: bool = True,
+        on_token_refresh: Optional[Callable[[Dict], None]] = None,
+    ):
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+        self.token_endpoint = token_endpoint
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.verify = verify
+        self.on_token_refresh = on_token_refresh
+
+    def _apply(self, conn: types.ConnectionP) -> None:
+        conn.session.auth = BearerAuth(self.access_token)
+
+    def login(self, conn: types.ConnectionP) -> None:
+        self._apply(conn)
+
+    def authenticate(self, conn: types.ConnectionP) -> httpx.Client:
+        """Refresh the access token and re-apply it to the session."""
+        try:
+            data = {
+                "grant_type": "refresh_token",
+                "refresh_token": self.refresh_token,
+                "client_id": self.client_id,
+            }
+            if self.client_secret:
+                data["client_secret"] = self.client_secret
+            resp = httpx.post(self.token_endpoint, data=data, timeout=15, verify=self.verify)
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 400:
+                raise errors.AccountError(
+                    "Refresh token expired or revoked — re-authentication required"
+                ) from exc
+            raise
+        tokens = resp.json()
+        token = tokens.get("access_token")
+        if not token:
+            raise errors.AccountError("No access token in refresh response")
+        self.access_token = token
+        if "refresh_token" in tokens:
+            self.refresh_token = tokens["refresh_token"]
+        self._apply(conn)
+        if self.on_token_refresh:
+            self.on_token_refresh(tokens)
+        return conn.session
+
+    def logoff(self, conn: types.ConnectionP) -> None:
+        conn.session.auth = None  # type: ignore[assignment]
 
 
 class Connection(types.ConnectionP):
