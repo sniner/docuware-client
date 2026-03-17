@@ -157,8 +157,10 @@ def test_connection_uses_custom_timeout():
 
 
 def test_connection_uses_default_timeout():
+    from docuware import conn as conn_module
+
     c = Connection(BASE)
-    assert c.session.timeout.read == 30.0
+    assert c.session.timeout.read == conn_module._DEFAULT_TIMEOUT
 
 
 # --- Connection._request: 401 retry ---
