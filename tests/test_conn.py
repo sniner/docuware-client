@@ -148,6 +148,19 @@ def test_make_url_with_query_appends_params():
     assert "n=1" in url
 
 
+# --- Connection.timeout ---
+
+
+def test_connection_uses_custom_timeout():
+    c = Connection(BASE, timeout=42.0)
+    assert c.session.timeout.read == 42.0
+
+
+def test_connection_uses_default_timeout():
+    c = Connection(BASE)
+    assert c.session.timeout.read == 30.0
+
+
 # --- Connection._request: 401 retry ---
 
 

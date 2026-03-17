@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json as stdjson
 import logging
+import os
 import urllib.parse as urlparse
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -11,6 +12,10 @@ from docuware import cijson, errors, parser, types
 from docuware.const import ACCEPT_JSON, ACCEPT_TEXT, BASE_HEADERS
 
 log = logging.getLogger(__name__)
+
+# Default request timeout in seconds.  DocuWare Cloud can be slow on the first
+# requests after login (session warm-up).  Override with the DW_TIMEOUT env var.
+_DEFAULT_TIMEOUT: float = float(os.environ.get("DW_TIMEOUT", "30"))
 
 
 def _server_message(resp: httpx.Response) -> Optional[str]:
@@ -28,9 +33,13 @@ class Connection(types.ConnectionP):
         case_insensitive: bool = True,
         verify_certificate: bool = True,
         authenticator: Optional[types.AuthenticatorP] = None,
+        timeout: Optional[float] = None,
     ):
         self.base_url = base_url
-        self.session = httpx.Client(verify=verify_certificate)
+        self.session = httpx.Client(
+            verify=verify_certificate,
+            timeout=httpx.Timeout(timeout if timeout is not None else _DEFAULT_TIMEOUT),
+        )
         self.authenticator = authenticator
         self._case_insensitive = case_insensitive
 
