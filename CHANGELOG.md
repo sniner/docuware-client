@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5] - 2026-03-17
+
+### Added
+
+- **`connect()`** and **`connect_with_tokens()`** now accept a `timeout` parameter (seconds) to
+  override the request timeout per connection
+- **`DW_TIMEOUT` environment variable**: sets the default timeout for all connections;
+  falls back to 30 s if not set (previously httpx's 5 s default)
+
 ## [0.7.4] - 2026-03-16
 
 ### Added
