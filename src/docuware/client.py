@@ -12,11 +12,12 @@ log = logging.getLogger(__name__)
 
 
 class DocuwareClient(types.DocuwareClientP):
-    def __init__(self, url: str, verify_certificate: bool = True):
+    def __init__(self, url: str, verify_certificate: bool = True, timeout: Optional[float] = None):
         self.conn = conn.Connection(
             url,
             case_insensitive=True,
             verify_certificate=verify_certificate,
+            timeout=timeout,
         )
         self.endpoints: structs.Endpoints = structs.EMPTY_ENDPOINT_TABLE
         self.resources: structs.Resources = structs.EMPTY_RESOURCE_TABLE
@@ -64,6 +65,7 @@ def connect(
     *,
     verify_certificate: bool = True,
     credentials_file: Optional[Union[str, pathlib.Path]] = None,
+    timeout: Optional[float] = None,
 ) -> DocuwareClient:
     """
     Connect to DocuWare server using credentials from arguments, environment, or file.
@@ -72,6 +74,10 @@ def connect(
     1. Arguments
     2. Environment variables (DW_URL, DW_USERNAME, DW_PASSWORD, DW_ORG)
     3. Saves a credentials file
+
+    Args:
+        timeout: Request timeout in seconds.  Defaults to the value of the
+                 ``DW_TIMEOUT`` environment variable, or 30 s if not set.
     """
     credentials_file = pathlib.Path(credentials_file) if credentials_file else None
 
@@ -93,7 +99,7 @@ def connect(
     if not url:
         raise errors.AccountError("URL is required (arg, env DW_URL, or .credentials file)")
 
-    client = DocuwareClient(url, verify_certificate=verify_certificate)
+    client = DocuwareClient(url, verify_certificate=verify_certificate, timeout=timeout)
     client.login(username=user, password=passwd, organization=org)
 
     # Save credentials if requested
@@ -128,6 +134,7 @@ def connect_with_tokens(
     client_secret: str = "",
     on_token_refresh: Optional[Callable[[Dict[str, Any]], None]] = None,
     verify_certificate: bool = True,
+    timeout: Optional[float] = None,
 ) -> DocuwareClient:
     """Connect to DocuWare using an existing OAuth2 access+refresh token pair.
 
@@ -149,11 +156,13 @@ def connect_with_tokens(
         on_token_refresh: Optional callback(tokens: dict) called after each
                           successful token refresh — use it to persist new tokens.
         verify_certificate: Whether to verify TLS certificates (default True).
+        timeout:          Request timeout in seconds.  Defaults to the value of
+                          the ``DW_TIMEOUT`` environment variable, or 30 s if not set.
 
     Returns:
         Connected DocuwareClient instance.
     """
-    client = DocuwareClient(url, verify_certificate=verify_certificate)
+    client = DocuwareClient(url, verify_certificate=verify_certificate, timeout=timeout)
     authenticator = auth.TokenAuthenticator(
         access_token=access_token,
         refresh_token=refresh_token,

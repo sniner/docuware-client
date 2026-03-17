@@ -38,8 +38,8 @@ def _patched_init(handler):
     """Returns a __init__ replacement that injects the mock transport."""
     original = DocuwareClient.__init__
 
-    def patched(self, url, verify_certificate=True):
-        original(self, url, verify_certificate)
+    def patched(self, url, verify_certificate=True, timeout=None):
+        original(self, url, verify_certificate, timeout=timeout)
         self.conn.session = httpx.Client(transport=httpx.MockTransport(handler))
 
     return patched
