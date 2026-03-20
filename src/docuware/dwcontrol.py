@@ -4,7 +4,7 @@ import logging
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from docuware.utils import safe_str
@@ -12,7 +12,10 @@ from docuware.utils import safe_str
 log = logging.getLogger(__name__)
 
 
-class FieldType(StrEnum):
+class FieldType(str, Enum):
+    def __str__(self):
+        return self.value
+
     TEXT = "Text"
     DATE = "Date"
     DATETIME = "DateTime"
