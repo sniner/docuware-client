@@ -467,48 +467,6 @@ def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     return 0
 
 
-def connect(args: argparse.Namespace) -> docuware.Client:
-    verify = not args.ignore_certificate
-    cred_file = args.credentials_file
-    if cred_file is None:
-        cred_file = docuware.default_credentials_file()
-    elif cred_file.is_dir():
-        print(f"ERROR: {cred_file} is a directory, not a file", file=sys.stderr)
-        sys.exit(1)
-    cred_file.parent.mkdir(exist_ok=True, parents=True)
-
-    if args.subcommand == "login":
-        try:
-            dw = docuware.connect(
-                url=args.url,
-                username=args.username,
-                password=args.password,
-                organization=args.organization,
-                verify_certificate=verify,
-                credentials_file=cred_file,
-            )
-        except (docuware.AccountError, docuware.ResourceError) as exc:
-            print(f"ERROR: {exc}", file=sys.stderr)
-            sys.exit(1)
-        print("Login successful", file=sys.stderr)
-        sys.exit(0)
-
-    if not cred_file.exists():
-        print("Please log in first!", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        dw = docuware.connect(
-            verify_certificate=verify,
-            credentials_file=cred_file,
-        )
-    except (docuware.AccountError, docuware.ResourceError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    return dw
-
-
 COMMANDS: Dict[str, Any] = {
     "list": list_cmd,
     "search": search_cmd,
@@ -524,13 +482,40 @@ COMMANDS: Dict[str, Any] = {
 
 def main() -> None:
     args = parse_arguments()
-    dw = connect(args)
     code = None
 
     try:
-        func = COMMANDS.get(args.subcommand)
-        if func:
-            code = func(dw, args)
+        verify = not args.ignore_certificate
+        cred_file = args.credentials_file
+        if cred_file is None:
+            cred_file = docuware.default_credentials_file()
+        elif cred_file.is_dir():
+            raise docuware.AccountError(f"{cred_file} is a directory, not a file")
+        cred_file.parent.mkdir(exist_ok=True, parents=True)
+
+        if args.subcommand == "login":
+            docuware.connect(
+                url=args.url,
+                username=args.username,
+                password=args.password,
+                organization=args.organization,
+                verify_certificate=verify,
+                credentials_file=cred_file,
+            )
+            print("Login successful", file=sys.stderr)
+        else:
+            if not cred_file.exists():
+                raise docuware.AccountError("Please log in first!")
+            dw = docuware.connect(
+                verify_certificate=verify,
+                credentials_file=cred_file,
+            )
+            func = COMMANDS.get(args.subcommand)
+            if func:
+                code = func(dw, args)
+    except (docuware.AccountError, docuware.ResourceError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        code = 1
     except BrokenPipeError:
         pass
     except KeyboardInterrupt:

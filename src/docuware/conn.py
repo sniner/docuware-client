@@ -111,7 +111,7 @@ class Connection(types.ConnectionP):
             files=files,
             params=params,
         )
-        if resp.status_code == 200:
+        if resp.is_success:
             return resp
         msg = _server_message(resp)
         raise errors.ResourceError(
@@ -159,7 +159,7 @@ class Connection(types.ConnectionP):
             data=data,
             params=params,
         )
-        if resp.status_code == 200:
+        if resp.is_success:
             return resp
         msg = _server_message(resp)
         raise errors.ResourceError(
@@ -205,7 +205,7 @@ class Connection(types.ConnectionP):
             headers=headers,
             params=params,
         )
-        if resp.status_code == 200:
+        if resp.is_success:
             return resp
         msg = _server_message(resp)
         raise errors.ResourceError(
@@ -237,7 +237,7 @@ class Connection(types.ConnectionP):
             headers=headers,
             params=params,
         )
-        if resp.status_code == 200:
+        if resp.is_success:
             return resp
         msg = _server_message(resp)
         raise errors.ResourceError(
@@ -260,7 +260,7 @@ class Connection(types.ConnectionP):
             headers={"Accept": mime_type if mime_type else "*/*"},
             params=params,
         )
-        if resp.status_code == 200:
+        if resp.is_success:
             content_type = resp.headers.get("Content-Type", "application/octet-stream")
             content_length = resp.headers.get("Content-Length")
             content_disposition = parser.parse_content_disposition(

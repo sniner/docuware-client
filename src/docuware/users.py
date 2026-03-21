@@ -171,13 +171,10 @@ class Users(types.UsersP):
         return (User.from_response(user, self.organization) for user in result.get("User", []))
 
     def __getitem__(self, key: str) -> types.UserP:
-        return structs.first_item_by_id_or_name(self, key)
+        return structs.first_item_by_id_or_name(self, key, required=True)
 
     def get(self, key: str, default: Optional[types.UserP] = None) -> Optional[types.UserP]:
-        try:
-            return self.__getitem__(key)
-        except KeyError:
-            return default
+        return structs.first_item_by_id_or_name(self, key, default=default)
 
     def add(self, user: types.UserP, password: Optional[str] = None) -> Optional[types.UserP]:
         headers = {
@@ -275,10 +272,7 @@ class Groups:
         )
 
     def __getitem__(self, key: str) -> types.GroupP:
-        return structs.first_item_by_id_or_name(self, key)
+        return structs.first_item_by_id_or_name(self, key, required=True)
 
     def get(self, key: str, default: Optional[types.GroupP] = None) -> Optional[types.GroupP]:
-        try:
-            return self.__getitem__(key)
-        except KeyError:
-            return default
+        return structs.first_item_by_id_or_name(self, key, default=default)

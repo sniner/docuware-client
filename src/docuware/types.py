@@ -112,7 +112,12 @@ class ConnectionP(Protocol):
 
     def get_text(self, path: str, headers: Optional[Dict[str, str]] = None) -> str: ...
 
-    def delete(self, path: str, headers: Optional[Dict[str, str]] = None) -> httpx.Response: ...
+    def delete(
+        self,
+        path: str,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[Dict[str, str]] = None,
+    ) -> httpx.Response: ...
 
     def get_bytes(
         self,

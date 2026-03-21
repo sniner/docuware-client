@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-03-21
+
+### Fixed
+
+- **`Users[key]`** and **`Groups[key]`**: lookup by name or ID now correctly raises `KeyError`
+  when the key is not found, instead of silently returning `None`
+- **HTTP methods**: `post()`, `put()`, `get()`, `delete()`, and `get_bytes()` now accept any 2xx
+  status code as success, not just 200 — compatible with APIs returning 201 Created or 204 No
+  Content
+- **`Document.upload_attachment()`**: response parsing now uses case-insensitive JSON keys,
+  consistent with the rest of the library
+
+### Changed
+
+- **`ConnectionP.delete()` protocol**: now declares the `params` parameter, matching the
+  actual implementation
+
 ## [0.7.6] - 2026-03-21
 
 ### Added

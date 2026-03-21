@@ -5,7 +5,7 @@ import mimetypes
 import pathlib
 from typing import IO, Any, Dict, Optional, Tuple, Union
 
-from docuware import errors, fields, structs, types, utils
+from docuware import cijson, errors, fields, structs, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ class Document:
             # Ideally reload the document to get full state.
             # But let's try to parse the response if it looks like a Section.
             try:
-                data = resp.json()
+                data = cijson.loads(resp.text)
                 if data and "ContentType" in data:
                     new_att = DocumentAttachment(data, self)
                     self.attachments.append(new_att)
