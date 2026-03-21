@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
-import random
+import secrets
 import re
 from datetime import date, datetime
 from typing import Any, Optional, Union
@@ -151,9 +151,5 @@ def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> pathlib.Pa
 
 
 def random_password(length: int = 16) -> str:
-    return "".join(
-        random.choices(
-            "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.,;:-_/+=",
-            k=length,
-        )
-    )
+    charset = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.,;:-_/+="
+    return "".join(secrets.choice(charset) for _ in range(length))

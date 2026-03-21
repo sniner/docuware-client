@@ -51,6 +51,8 @@ class ConnectionP(Protocol):
     session: httpx.Client
     base_url: str
 
+    def close(self) -> None: ...
+
     def make_path(self, path: str, query: Dict[str, str]) -> str: ...
 
     def make_url(self, path: str, query: Optional[Dict[str, str]] = None) -> str: ...
@@ -136,12 +138,14 @@ class DocuwareClientP(Protocol):
 
     def login(
         self,
-        username: Optional[str],
-        password: Optional[str],
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         organization: Optional[str] = None,
-    ) -> None: ...
+    ) -> DocuwareClientP: ...
 
     def logoff(self) -> None: ...
+
+    def close(self) -> None: ...
 
 
 ConfigItemT = List[Dict[str, str]]

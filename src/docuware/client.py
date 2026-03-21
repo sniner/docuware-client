@@ -12,11 +12,18 @@ log = logging.getLogger(__name__)
 
 
 class DocuwareClient(types.DocuwareClientP):
-    def __init__(self, url: str, verify_certificate: bool = True, timeout: Optional[float] = None):
+    def __init__(
+        self,
+        url: str,
+        verify_certificate: bool = True,
+        timeout: Optional[float] = None,
+        authenticator: Optional[types.AuthenticatorP] = None,
+    ):
         self.conn = conn.Connection(
             url,
             case_insensitive=True,
             verify_certificate=verify_certificate,
+            authenticator=authenticator,
             timeout=timeout,
         )
         self.endpoints: structs.Endpoints = structs.EMPTY_ENDPOINT_TABLE
@@ -36,17 +43,21 @@ class DocuwareClient(types.DocuwareClientP):
 
     def login(
         self,
-        username: Optional[str],
-        password: Optional[str],
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         organization: Optional[str] = None,
-    ) -> None:
-        authenticator = auth.OAuth2Authenticator(
-            username=username,
-            password=password,
-            organization=organization,
-        )
-        self.conn.authenticator = authenticator
-        authenticator.login(self.conn)
+    ) -> DocuwareClient:
+        if not self.conn.authenticator:
+            self.conn.authenticator = auth.OAuth2Authenticator(
+                username=username,
+                password=password,
+                organization=organization,
+            )
+        self.conn.authenticator.login(self.conn)
+        self._init_platform()
+        return self
+
+    def _init_platform(self) -> None:
         res = self.conn.get_json("/DocuWare/Platform")
         self.endpoints = structs.Endpoints(res)
         self.resources = structs.Resources(res)
@@ -55,6 +66,16 @@ class DocuwareClient(types.DocuwareClientP):
     def logoff(self) -> None:
         if self.conn.authenticator:
             self.conn.authenticator.logoff(self.conn)
+
+    def close(self) -> None:
+        self.logoff()
+        self.conn.close()
+
+    def __enter__(self) -> DocuwareClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
 
 def connect(
@@ -162,7 +183,6 @@ def connect_with_tokens(
     Returns:
         Connected DocuwareClient instance.
     """
-    client = DocuwareClient(url, verify_certificate=verify_certificate, timeout=timeout)
     authenticator = auth.TokenAuthenticator(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -172,10 +192,9 @@ def connect_with_tokens(
         verify=verify_certificate,
         on_token_refresh=on_token_refresh,
     )
-    client.conn.authenticator = authenticator
-    authenticator.login(client.conn)
-    res = client.conn.get_json("/DocuWare/Platform")
-    client.endpoints = structs.Endpoints(res)
-    client.resources = structs.Resources(res)
-    client.version = res.get("Version")
-    return client
+    return DocuwareClient(
+        url,
+        verify_certificate=verify_certificate,
+        timeout=timeout,
+        authenticator=authenticator,
+    ).login()

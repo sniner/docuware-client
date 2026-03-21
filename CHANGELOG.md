@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-03-21
+
+### Added
+
+- **`DocuwareClient`** and **`Connection`** are now context managers — use `with connect(...) as client:`
+  to ensure the session is closed and the user is logged off on exit
+- **`DocuwareClient.close()`** and **`Connection.close()`**: explicit close methods for non-`with`
+  usage
+- **`DocuwareClient`** constructor now accepts an `authenticator` parameter, allowing a pre-built
+  authenticator to be injected instead of always going through `login()`
+- **`DocuwareClient.login()`** returns `self`, enabling chained construction:
+  `DocuwareClient(url).login(username, password)`
+
+### Changed
+
+- **`DocuwareClient.login()`**: `username` and `password` are now optional (default `None`);
+  when an authenticator was already injected via the constructor, `login()` uses it directly
+  without creating a new one
+- **`random_password()`** now uses `secrets.choice()` instead of `random.choices()` for
+  cryptographically secure password generation
+
 ## [0.7.5] - 2026-03-17
 
 ### Added

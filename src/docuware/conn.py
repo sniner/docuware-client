@@ -43,6 +43,15 @@ class Connection(types.ConnectionP):
         self.authenticator = authenticator
         self._case_insensitive = case_insensitive
 
+    def close(self) -> None:
+        self.session.close()
+
+    def __enter__(self) -> Connection:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
     def make_path(self, path: str, query: Dict[str, str]) -> str:
         u = urlparse.urlsplit(path)
         q = "&".join(
