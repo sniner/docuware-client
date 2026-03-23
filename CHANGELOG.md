@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-03-23
+
+### Added
+
+- **`exchange_pkce_code()`**: new optional `client_secret` parameter for confidential clients
+  (web applications registered in DocuWare). Public clients (native/SPA) are unaffected —
+  the parameter defaults to empty and is omitted from the token request
+- **`examples/oauth2_webapp.py`**: complete example for the web application login flow
+  (Authorization Code + client_secret + PKCE)
+
 ## [0.7.7] - 2026-03-21
 
 ### Fixed
