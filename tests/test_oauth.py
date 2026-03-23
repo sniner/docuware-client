@@ -186,6 +186,52 @@ def test_exchange_posts_correct_data():
     )
 
 
+def test_exchange_includes_client_secret_when_provided():
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "access_token": "at_123",
+        "refresh_token": "rt_456",
+        "expires_in": 3600,
+    }
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("docuware.oauth.httpx.post", return_value=mock_resp) as mock_post:
+        tokens = exchange_pkce_code(
+            code="auth_code",
+            code_verifier="verifier_xyz",
+            redirect_uri="http://localhost:18080/callback",
+            token_endpoint=TOKEN_EP,
+            client_id="test-client",
+            client_secret="test-secret",
+        )
+
+    assert tokens["access_token"] == "at_123"
+    posted_data = mock_post.call_args.kwargs.get("data", {})
+    assert posted_data["client_secret"] == "test-secret"
+    assert posted_data["client_id"] == "test-client"
+    assert posted_data["code_verifier"] == "verifier_xyz"
+
+
+def test_exchange_omits_client_secret_when_empty():
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"access_token": "at", "expires_in": 3600}
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("docuware.oauth.httpx.post", return_value=mock_resp) as mock_post:
+        exchange_pkce_code(
+            code="c",
+            code_verifier="v",
+            redirect_uri="http://localhost/cb",
+            token_endpoint=TOKEN_EP,
+            client_id="cid",
+        )
+
+    posted_data = mock_post.call_args.kwargs.get("data", {})
+    assert "client_secret" not in posted_data
+
+
 def test_exchange_passes_verify_false():
     mock_resp = MagicMock(spec=httpx.Response)
     mock_resp.status_code = 200
