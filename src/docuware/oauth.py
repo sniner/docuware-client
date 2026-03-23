@@ -95,13 +95,17 @@ def exchange_pkce_code(
     token_endpoint: str,
     client_id: str,
     *,
+    client_secret: str = "",
     verify: bool = True,
 ) -> Dict[str, Any]:
-    """Exchange an OAuth2 authorization code for tokens (PKCE flow).
+    """Exchange an OAuth2 authorization code for tokens.
 
     Sends a ``grant_type=authorization_code`` POST to the token endpoint and
     returns the raw token response as a dict (contains ``access_token``,
     ``refresh_token``, ``expires_in``, etc.).
+
+    Supports both public clients (native/SPA apps using PKCE) and confidential
+    clients (web apps with a ``client_secret``).
 
     Args:
         code:           Authorization code received in the callback.
@@ -111,6 +115,8 @@ def exchange_pkce_code(
                         exactly, including the port number.
         token_endpoint: Token endpoint URL (from :func:`discover_oauth_endpoints`).
         client_id:      OAuth2 client ID from the DocuWare App Registration.
+        client_secret:  OAuth2 client secret — required for confidential clients
+                        (web apps), empty for public/native clients (default).
         verify:         Whether to verify TLS certificates (default ``True``).
 
     Returns:
@@ -120,15 +126,18 @@ def exchange_pkce_code(
         errors.AccountError: If the token endpoint returns HTTP 400 (invalid/expired code).
         httpx.HTTPStatusError: If the token endpoint returns any other error response.
     """
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "code_verifier": code_verifier,
+    }
+    if client_secret:
+        data["client_secret"] = client_secret
     resp = httpx.post(
         token_endpoint,
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-            "code_verifier": code_verifier,
-        },
+        data=data,
         timeout=15,
         verify=verify,
     )
