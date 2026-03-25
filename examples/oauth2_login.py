@@ -23,14 +23,18 @@ Settings:
   URL Redirects (Redirect URIs):
     http://localhost:18923/callback
 
-  IMPORTANT: DocuWare validates the redirect URI exactly, including the port
-  number.  The default port used by this script is 18923.  If you change
-  CALLBACK_PORT below, update the App Registration to match.
+  IMPORTANT: DocuWare validates the redirect URI *exactly*, including the
+  port number.  The default port used by this script is 18923.  If you
+  change CALLBACK_PORT below, update the App Registration to match.
 
   Scopes:
     docuware.platform  openid  dwprofile  offline_access
 
   Refresh token:  enabled
+
+  After entering these settings, click **Save** in the App Registration
+  dialog.  The registration is not active until it has been saved — you
+  will get an "invalid_request: Invalid redirect_uri" error otherwise.
 
 HOW IT WORKS
 ============
@@ -51,8 +55,6 @@ Usage:
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import http.server
 import secrets
 import time
@@ -64,21 +66,6 @@ import docuware
 CALLBACK_PORT = 18923
 CALLBACK_PATH = "/callback"
 REDIRECT_URI = f"http://localhost:{CALLBACK_PORT}{CALLBACK_PATH}"
-
-SCOPES = "docuware.platform openid dwprofile offline_access"
-
-
-# ---------------------------------------------------------------------------
-# PKCE helpers
-# ---------------------------------------------------------------------------
-
-
-def _generate_pkce() -> tuple[str, str]:
-    """Return (code_verifier, code_challenge) using S256 method."""
-    verifier = secrets.token_urlsafe(96)  # exactly 128 URL-safe chars
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return verifier, challenge
 
 
 # ---------------------------------------------------------------------------
@@ -145,12 +132,7 @@ def main() -> None:
     if not url_input:
         print("Error: URL is required.")
         return
-    if "/DocuWare/" not in url_input:
-        if not url_input.startswith("http"):
-            url_input = "https://" + url_input
-        docuware_url = url_input.rstrip("/") + "/DocuWare/Platform"
-    else:
-        docuware_url = url_input
+    docuware_url = docuware.normalize_docuware_url(url_input)
     print(f"  → {docuware_url}")
     print()
 
@@ -163,28 +145,20 @@ def main() -> None:
     # --- Step 2: discover endpoints ---
     print("Discovering OAuth2 endpoints...")
     try:
-        auth_endpoint, token_endpoint = docuware.discover_oauth_endpoints(docuware_url)
+        endpoints = docuware.discover_oauth_endpoints(docuware_url)
     except RuntimeError as exc:
         print(f"Error: {exc}")
         return
-    print(f"  Authorization endpoint: {auth_endpoint}")
-    print(f"  Token endpoint:         {token_endpoint}")
+    print(f"  Authorization endpoint: {endpoints.authorization_endpoint}")
+    print(f"  Token endpoint:         {endpoints.token_endpoint}")
     print()
 
     # --- Step 3: PKCE setup ---
-    verifier, challenge = _generate_pkce()
+    verifier, challenge = docuware.generate_pkce()
     state = secrets.token_urlsafe(32)
-
-    params = {
-        "response_type": "code",
-        "client_id": client_id,
-        "redirect_uri": REDIRECT_URI,
-        "scope": SCOPES,
-        "code_challenge": challenge,
-        "code_challenge_method": "S256",
-        "state": state,
-    }
-    auth_url = f"{auth_endpoint}?{urllib.parse.urlencode(params)}"
+    auth_url = docuware.build_authorization_url(
+        endpoints.authorization_endpoint, client_id, REDIRECT_URI, challenge, state,
+    )
 
     # --- Step 4: start callback server and open browser ---
     _CallbackHandler.code = None
@@ -228,7 +202,7 @@ def main() -> None:
             code=_CallbackHandler.code,
             code_verifier=verifier,
             redirect_uri=REDIRECT_URI,
-            token_endpoint=token_endpoint,
+            token_endpoint=endpoints.token_endpoint,
             client_id=client_id,
         )
     except Exception as exc:
@@ -249,7 +223,7 @@ def main() -> None:
             url=docuware_url,
             access_token=tokens["access_token"],
             refresh_token=tokens.get("refresh_token", ""),
-            token_endpoint=token_endpoint,
+            token_endpoint=endpoints.token_endpoint,
             client_id=client_id,
         )
     except Exception as exc:
@@ -271,7 +245,7 @@ def main() -> None:
     print(f"      url={docuware_url!r},")
     print("      access_token=tokens['access_token'],")
     print("      refresh_token=tokens['refresh_token'],")
-    print(f"      token_endpoint={token_endpoint!r},")
+    print(f"      token_endpoint={endpoints.token_endpoint!r},")
     print(f"      client_id={client_id!r},")
     print("  )")
     print()
