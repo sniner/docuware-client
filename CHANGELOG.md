@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.9] - 2026-03-25
+
+### Added
+
+- **`normalize_docuware_url()`**: expand bare tenant names (`"acme"`), hostnames
+  (`"acme.docuware.cloud"`), or full URLs to the canonical Platform URL
+- **`generate_pkce()`**: generate a PKCE code_verifier / code_challenge (S256) pair
+- **`build_authorization_url()`**: build the OAuth2 authorization redirect URL with PKCE
+  parameters
+- **`DW_OAUTH_SCOPES`**: constant with the standard DocuWare OAuth2 scopes
+- **`OAuthEndpoints`**: NamedTuple returned by `discover_oauth_endpoints()` with
+  `authorization_endpoint`, `token_endpoint`, and `identity_service_url`
+
+### Breaking changes
+
+- **`discover_oauth_endpoints()`** now returns a 3-element `OAuthEndpoints` NamedTuple
+  instead of a 2-tuple. Existing `a, b = discover_oauth_endpoints(...)` must become
+  `a, b, _ = ...` or use named field access (`endpoints.authorization_endpoint`).
+  The function also accepts short tenant names and hostnames now (via `normalize_docuware_url`)
+
 ## [0.7.8] - 2026-03-23
 
 ### Added
