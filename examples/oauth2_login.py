@@ -23,14 +23,18 @@ Settings:
   URL Redirects (Redirect URIs):
     http://localhost:18923/callback
 
-  IMPORTANT: DocuWare validates the redirect URI exactly, including the port
-  number.  The default port used by this script is 18923.  If you change
-  CALLBACK_PORT below, update the App Registration to match.
+  IMPORTANT: DocuWare validates the redirect URI *exactly*, including the
+  port number.  The default port used by this script is 18923.  If you
+  change CALLBACK_PORT below, update the App Registration to match.
 
   Scopes:
     docuware.platform  openid  dwprofile  offline_access
 
   Refresh token:  enabled
+
+  After entering these settings, click **Save** in the App Registration
+  dialog.  The registration is not active until it has been saved — you
+  will get an "invalid_request: Invalid redirect_uri" error otherwise.
 
 HOW IT WORKS
 ============

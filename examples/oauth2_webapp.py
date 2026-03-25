@@ -23,9 +23,9 @@ Settings:
   URL Redirects (Redirect URIs):
     http://localhost:18080/callback
 
-  IMPORTANT: DocuWare validates the redirect URI exactly, including the port
-  number.  The default port used by this script is 18080.  If you change
-  CALLBACK_PORT below, update the App Registration to match.
+  IMPORTANT: DocuWare validates the redirect URI *exactly*, including the
+  port number.  The default port used by this script is 18080.  If you
+  change CALLBACK_PORT below, update the App Registration to match.
 
   Allowed Resources:
     Platform API
@@ -34,6 +34,22 @@ Settings:
     docuware.platform  openid  dwprofile
 
   Refresh token:  enabled (recommended)
+
+  After entering these settings, click **Save** in the App Registration
+  dialog.  The registration is not active until it has been saved — you
+  will get an "invalid_request: Invalid redirect_uri" error otherwise.
+
+LOCAL TESTING
+=============
+
+This script works on your local machine even though the App Registration
+is of type "Web application".  The callback server runs on localhost and
+receives the authorization code just like a real web server would.  This
+makes it useful for testing your App Registration and obtaining initial
+tokens without deploying a web application first.
+
+Simply run the script, log in via the browser, and the tokens are printed
+to the console.
 
 HOW IT WORKS
 ============
