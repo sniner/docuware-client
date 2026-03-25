@@ -67,7 +67,7 @@ def generate_pkce() -> tuple[str, str]:
         128-character URL-safe random string; the challenge is its SHA-256
         hash, base64url-encoded without padding.
     """
-    verifier = secrets.token_urlsafe(64)[:128]
+    verifier = secrets.token_urlsafe(96)[:128]
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     return verifier, challenge
