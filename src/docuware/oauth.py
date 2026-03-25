@@ -1,10 +1,11 @@
 """OAuth2 utilities for DocuWare PKCE flows.
 
-Provides two building blocks that any application can use to implement
+Provides building blocks that any application can use to implement
 an Authorization Code + PKCE login flow against DocuWare:
 
-    authorization_endpoint, token_endpoint = discover_oauth_endpoints(url)
-    tokens = exchange_pkce_code(code, verifier, redirect_uri, token_endpoint, client_id)
+    endpoints = discover_oauth_endpoints(url)
+    tokens = exchange_pkce_code(code, verifier, redirect_uri,
+                                endpoints.token_endpoint, client_id)
 
 The interactive parts (opening a browser, running a local callback server,
 prompting the user) are intentionally left to the application layer.
@@ -13,24 +14,67 @@ See the examples/oauth2_login.py script for a complete reference implementation.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple
 
 import httpx
 
 from docuware import errors
 
 __all__ = [
+    "OAuthEndpoints",
     "discover_oauth_endpoints",
     "exchange_pkce_code",
+    "normalize_docuware_url",
 ]
+
+
+class OAuthEndpoints(NamedTuple):
+    """Result of OAuth2 endpoint discovery."""
+
+    authorization_endpoint: str
+    token_endpoint: str
+    identity_service_url: str
+
+
+def normalize_docuware_url(value: str) -> str:
+    """Expand a bare hostname or short tenant name to a full DocuWare Platform URL.
+
+    If the input contains no dots it is assumed to be a DocuWare Cloud tenant
+    name and ``.docuware.cloud`` is appended automatically.
+
+    Examples::
+
+        normalize_docuware_url("acme")
+        # → "https://acme.docuware.cloud/DocuWare/Platform"
+
+        normalize_docuware_url("dw.example.com")
+        # → "https://dw.example.com/DocuWare/Platform"
+
+        normalize_docuware_url("https://dw.example.com/DocuWare/Platform")
+        # → "https://dw.example.com/DocuWare/Platform"  (unchanged)
+    """
+    v = value.strip()
+    if not v:
+        return v
+    if "/DocuWare/" in v:
+        return v
+    if not v.startswith("http://") and not v.startswith("https://"):
+        if "." not in v:
+            v = v + ".docuware.cloud"
+        v = "https://" + v
+    return v.rstrip("/") + "/DocuWare/Platform"
 
 
 def discover_oauth_endpoints(
     docuware_url: str,
     *,
     verify: bool = True,
-) -> tuple[str, str]:
+) -> OAuthEndpoints:
     """Discover the OAuth2 authorization and token endpoints for a DocuWare instance.
+
+    Works for both DocuWare Cloud (where the Identity Service lives on a
+    separate host like ``login-emea.docuware.cloud``) and Self-Hosted
+    instances (where identity is on the same host).
 
     Performs two HTTP requests:
       1. ``GET <docuware_url>/Home/IdentityServiceInfo`` — DocuWare-specific endpoint
@@ -39,18 +83,24 @@ def discover_oauth_endpoints(
          Connect discovery document.
 
     Args:
-        docuware_url: DocuWare Platform base URL, e.g.
-                      ``https://acme.docuware.cloud/DocuWare/Platform``.
+        docuware_url: DocuWare server URL.  Accepts any of:
+
+                      - Full Platform URL: ``https://acme.docuware.cloud/DocuWare/Platform``
+                      - Base server URL: ``https://acme.docuware.cloud``
+                      - Bare hostname: ``acme.docuware.cloud``
+                      - Short tenant name: ``acme`` (expands to ``acme.docuware.cloud``)
         verify:       Whether to verify TLS certificates (default ``True``).
                       Set to ``False`` for on-prem instances with self-signed certs.
 
     Returns:
-        A ``(authorization_endpoint, token_endpoint)`` tuple.
+        An :class:`OAuthEndpoints` named tuple with ``authorization_endpoint``,
+        ``token_endpoint``, and ``identity_service_url``.
 
     Raises:
         RuntimeError: If either request fails or the expected fields are absent.
     """
-    info_url = docuware_url.rstrip("/") + "/Home/IdentityServiceInfo"
+    platform_url = normalize_docuware_url(docuware_url)
+    info_url = platform_url.rstrip("/") + "/Home/IdentityServiceInfo"
     try:
         resp = httpx.get(
             info_url,
@@ -85,7 +135,7 @@ def discover_oauth_endpoints(
     if not auth_ep or not token_ep:
         raise RuntimeError("Endpoints missing in OpenID Connect discovery response.")
 
-    return auth_ep, token_ep
+    return OAuthEndpoints(auth_ep, token_ep, identity_url)
 
 
 def exchange_pkce_code(
