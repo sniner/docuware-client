@@ -14,9 +14,12 @@ from docuware.errors import (
 )
 from docuware.filecabinet import Basket, FileCabinet
 from docuware.oauth import (
+    DW_OAUTH_SCOPES,
     OAuthEndpoints,
+    build_authorization_url,
     discover_oauth_endpoints,
     exchange_pkce_code,
+    generate_pkce,
     normalize_docuware_url,
 )
 from docuware.organization import Organization
@@ -57,12 +60,15 @@ __all__ = [
     "TokenAuthenticator",
     "User",
     "UserOrGroupError",
+    "DW_OAUTH_SCOPES",
     "OAuthEndpoints",
+    "build_authorization_url",
     "connect",
     "connect_with_tokens",
     "default_credentials_file",
     "discover_oauth_endpoints",
     "exchange_pkce_code",
+    "generate_pkce",
     "normalize_docuware_url",
     "quote_value",
     "random_password",

@@ -4,6 +4,12 @@ Provides building blocks that any application can use to implement
 an Authorization Code + PKCE login flow against DocuWare:
 
     endpoints = discover_oauth_endpoints(url)
+    verifier, challenge = generate_pkce()
+    auth_url = build_authorization_url(
+        endpoints.authorization_endpoint, client_id,
+        redirect_uri, challenge, state,
+    )
+    # ... user logs in via browser, callback returns code ...
     tokens = exchange_pkce_code(code, verifier, redirect_uri,
                                 endpoints.token_endpoint, client_id)
 
@@ -14,16 +20,33 @@ See the examples/oauth2_login.py script for a complete reference implementation.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import secrets
+import urllib.parse
 from typing import Any, Dict, NamedTuple
 
 import httpx
 
 from docuware import errors
 
+# OAuth scopes requested from DocuWare's Identity Service.
+#
+#   docuware.platform  — access to the DocuWare Platform REST API
+#   openid             — OpenID Connect; provides the "sub" claim (user ID)
+#   dwprofile          — DocuWare-specific profile claims (display name,
+#                        e-mail, organization membership)
+#   offline_access     — issues a refresh token so the session can be
+#                        renewed without re-prompting the user
+DW_OAUTH_SCOPES = "docuware.platform openid dwprofile offline_access"
+
 __all__ = [
+    "DW_OAUTH_SCOPES",
     "OAuthEndpoints",
+    "build_authorization_url",
     "discover_oauth_endpoints",
     "exchange_pkce_code",
+    "generate_pkce",
     "normalize_docuware_url",
 ]
 
@@ -34,6 +57,56 @@ class OAuthEndpoints(NamedTuple):
     authorization_endpoint: str
     token_endpoint: str
     identity_service_url: str
+
+
+def generate_pkce() -> tuple[str, str]:
+    """Generate a PKCE code_verifier and code_challenge (S256).
+
+    Returns:
+        A ``(code_verifier, code_challenge)`` tuple.  The verifier is a
+        128-character URL-safe random string; the challenge is its SHA-256
+        hash, base64url-encoded without padding.
+    """
+    verifier = secrets.token_urlsafe(64)[:128]
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return verifier, challenge
+
+
+def build_authorization_url(
+    authorization_endpoint: str,
+    client_id: str,
+    redirect_uri: str,
+    code_challenge: str,
+    state: str,
+    *,
+    scope: str = DW_OAUTH_SCOPES,
+) -> str:
+    """Build the OAuth2 authorization URL with PKCE parameters.
+
+    Args:
+        authorization_endpoint: The authorization endpoint URL
+            (from :func:`discover_oauth_endpoints`).
+        client_id:      OAuth2 client ID from the DocuWare App Registration.
+        redirect_uri:   Redirect URI registered in the App Registration.
+        code_challenge: PKCE code challenge (from :func:`generate_pkce`).
+        state:          Anti-CSRF state parameter.
+        scope:          OAuth2 scopes to request.  Defaults to
+                        :data:`DW_OAUTH_SCOPES`.
+
+    Returns:
+        The full authorization URL to redirect the user to.
+    """
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": scope,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+        "state": state,
+    }
+    return f"{authorization_endpoint}?{urllib.parse.urlencode(params)}"
 
 
 def normalize_docuware_url(value: str) -> str:

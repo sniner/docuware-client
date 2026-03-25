@@ -1,7 +1,8 @@
-"""Tests for docuware.oauth — discovery, URL normalization, and code exchange."""
+"""Tests for docuware.oauth — discovery, URL normalization, PKCE helpers, and code exchange."""
 
 from __future__ import annotations
 
+import urllib.parse
 from unittest.mock import patch, MagicMock
 
 import httpx
@@ -9,9 +10,12 @@ import pytest
 
 from docuware import errors
 from docuware.oauth import (
+    DW_OAUTH_SCOPES,
     OAuthEndpoints,
+    build_authorization_url,
     discover_oauth_endpoints,
     exchange_pkce_code,
+    generate_pkce,
     normalize_docuware_url,
 )
 
@@ -104,6 +108,73 @@ class TestNormalizeDocuwareUrl:
     def test_preserves_existing_docuware_path(self):
         url = "https://dw.example.com/DocuWare/Platform/Home"
         assert normalize_docuware_url(url) == url
+
+
+# --- generate_pkce ---
+
+
+class TestGeneratePkce:
+    def test_returns_verifier_and_challenge(self):
+        verifier, challenge = generate_pkce()
+        assert isinstance(verifier, str)
+        assert isinstance(challenge, str)
+        assert len(verifier) > 40
+        assert len(challenge) > 10
+
+    def test_verifier_is_url_safe(self):
+        verifier, _ = generate_pkce()
+        # URL-safe base64 only uses [A-Za-z0-9_-]
+        assert all(c.isalnum() or c in "_-" for c in verifier)
+
+    def test_challenge_is_base64url_no_padding(self):
+        _, challenge = generate_pkce()
+        assert "=" not in challenge
+        assert all(c.isalnum() or c in "_-" for c in challenge)
+
+    def test_different_each_call(self):
+        v1, c1 = generate_pkce()
+        v2, c2 = generate_pkce()
+        assert v1 != v2
+        assert c1 != c2
+
+    def test_challenge_matches_verifier(self):
+        """Verify the S256 relationship between verifier and challenge."""
+        import base64
+        import hashlib
+
+        verifier, challenge = generate_pkce()
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        expected = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+        assert challenge == expected
+
+
+# --- build_authorization_url ---
+
+
+class TestBuildAuthorizationUrl:
+    def test_returns_url_with_params(self):
+        url = build_authorization_url(AUTH_EP, "my-client", "http://localhost/cb", "ch", "st")
+        assert url.startswith(AUTH_EP + "?")
+        params = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+        assert params["response_type"] == "code"
+        assert params["client_id"] == "my-client"
+        assert params["redirect_uri"] == "http://localhost/cb"
+        assert params["code_challenge"] == "ch"
+        assert params["code_challenge_method"] == "S256"
+        assert params["state"] == "st"
+        assert params["scope"] == DW_OAUTH_SCOPES
+
+    def test_custom_scope(self):
+        url = build_authorization_url(
+            AUTH_EP, "c", "http://localhost/cb", "ch", "st", scope="openid",
+        )
+        params = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+        assert params["scope"] == "openid"
+
+    def test_default_scope_is_dw_oauth_scopes(self):
+        url = build_authorization_url(AUTH_EP, "c", "http://localhost/cb", "ch", "st")
+        params = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(url).query))
+        assert params["scope"] == DW_OAUTH_SCOPES
 
 
 # --- discover_oauth_endpoints ---
