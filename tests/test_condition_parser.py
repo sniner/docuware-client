@@ -113,6 +113,31 @@ def test_condition_parser_dict_none_in_list(condition_parser):
     ]
 
 
+def test_condition_parser_open_range_upper(condition_parser):
+    # Open upper bound: [value, None] → None stays None (JSON null)
+    result = condition_parser.parse({"FIELD1": ["2025-01-01", None]})
+    assert result == [("FIELD1", ["2025-01-01", None])]
+
+
+def test_condition_parser_open_range_lower(condition_parser):
+    # Open lower bound: [None, value] → None stays None (JSON null)
+    result = condition_parser.parse({"FIELD1": [None, "2025-12-31"]})
+    assert result == [("FIELD1", [None, "2025-12-31"])]
+
+
+def test_condition_parser_open_range_with_date(condition_parser):
+    # Open range with date object: the non-None value is converted, None stays
+    d = date(2025, 1, 1)
+    result = condition_parser.parse({"FIELD1": [d, None]})
+    assert result == [("FIELD1", ["2025-01-01", None])]
+
+
+def test_condition_parser_closed_range_unchanged(condition_parser):
+    # Closed range (both non-None): both values converted normally
+    result = condition_parser.parse({"FIELD1": ["2025-01-01", "2025-12-31"]})
+    assert result == [("FIELD1", ["2025-01-01", "2025-12-31"])]
+
+
 def test_condition_parser_dict_datetime(condition_parser):
     # datetime value → ISO 8601 format
     dt = datetime(2024, 3, 15, 12, 0, 0)
