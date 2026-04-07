@@ -166,6 +166,9 @@ from datetime import date
 dlg.search({"DOCDATE": [date(2023, 1, 1), date(2023, 1, 31)]})
 # Documents with CUSTOMERNO between 1000 and 2000:
 dlg.search({"CUSTOMERNO": [1000, 2000]})
+# Open-ended ranges — use None for the missing bound:
+dlg.search({"DOCDATE": [date(2023, 1, 1), None]})   # from 2023-01-01 onwards
+dlg.search({"DOCDATE": [None, date(2023, 12, 31)]})  # up to 2023-12-31
 ```
 
 To match a field against a set of **discrete values**, use separate conditions

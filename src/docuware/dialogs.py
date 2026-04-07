@@ -4,7 +4,7 @@ import enum
 import logging
 import re
 from datetime import date
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from docuware import document, errors, fields, parser, structs, types, utils
 
@@ -230,36 +230,37 @@ class ConditionParser:
         return field
 
     def _term(
-        self, name: str, value: Union[str, List[str]], quote: QuoteMode = QuoteMode.NONE
+        self, name: str, value: Union[str, Sequence[Optional[str]]], quote: QuoteMode = QuoteMode.NONE
     ) -> Tuple[str, List[Optional[str]]]:
         field = self.field_by_name(name)
+        converted: List[Optional[str]]
         if isinstance(value, list):
             if len(value) == 2 and (value[0] is None or value[1] is None):
                 # Open-ended range: keep None as None so JSON serialises it
                 # as null (DocuWare expects null for open range bounds).
-                value = [
+                converted = [
                     self.convert_field_value(v, quote) if v is not None else None
                     for v in value
                 ]
             else:
-                value = [self.convert_field_value(v, quote) for v in value]
+                converted = [self.convert_field_value(v, quote) for v in value]
         else:
-            value = [self.convert_field_value(value, quote)]
-        return field.id, value
+            converted = [self.convert_field_value(value, quote)]
+        return field.id, converted
 
     def parse_list(
         self, conditions: Union[List[str], Tuple[str]]
-    ) -> List[Tuple[str, List[str]]]:
+    ) -> List[Tuple[str, List[Optional[str]]]]:
         return [self._term(*parser.parse_search_condition(c)) for c in conditions]
 
     def parse_dict(
-        self, conditions: Dict[str, Union[str, List[str]]], quote: QuoteMode = QuoteMode.PARTIAL
-    ) -> List[Tuple[str, List[str]]]:
+        self, conditions: Dict[str, Union[str, List[Optional[str]]]], quote: QuoteMode = QuoteMode.PARTIAL
+    ) -> List[Tuple[str, List[Optional[str]]]]:
         return [self._term(k, v, quote) for k, v in conditions.items()]
 
     def parse(
         self, conditions: types.SearchConditionsT, quote: QuoteMode = QuoteMode.PARTIAL
-    ) -> List[Tuple[str, List[str]]]:
+    ) -> List[Tuple[str, List[Optional[str]]]]:
         if isinstance(conditions, str):
             return self.parse_list([conditions])
         elif isinstance(conditions, (list, tuple)):

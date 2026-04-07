@@ -342,7 +342,7 @@ class DialogP(IdNameP, Protocol):
     def fields(self) -> Dict[str, SearchFieldP]: ...
 
 
-SearchConditionsT = Union[str, List[str], Tuple[str], Dict[str, Union[str, List[str]]]]
+SearchConditionsT = Union[str, List[str], Tuple[str], Dict[str, Union[str, List[Optional[str]]]]]
 
 
 class SearchDialogP(DialogP, Protocol):

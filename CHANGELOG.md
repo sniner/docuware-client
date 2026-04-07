@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.10] - 2026-04-07
+
+### Fixed
+
+- **Search with open-ended ranges**: `None` bounds in range conditions (e.g.
+  `{"DOCDATE": [date(2023, 1, 1), None]}`) are now correctly preserved as JSON `null`,
+  so DocuWare returns the expected results instead of silently matching nothing
+- **Type annotations**: fixed type inconsistencies in `ConditionParser` and related
+  methods that caused type checker errors with strict tools like basedpyright
+
+### Changed
+
+- **README**: added examples for open-ended range searches using `None`
+
 ## [0.7.9] - 2026-03-25
 
 ### Added
