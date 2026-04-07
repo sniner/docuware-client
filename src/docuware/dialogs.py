@@ -231,10 +231,18 @@ class ConditionParser:
 
     def _term(
         self, name: str, value: Union[str, List[str]], quote: QuoteMode = QuoteMode.NONE
-    ) -> Tuple[str, List[str]]:
+    ) -> Tuple[str, List[Optional[str]]]:
         field = self.field_by_name(name)
         if isinstance(value, list):
-            value = [self.convert_field_value(v, quote) for v in value]
+            if len(value) == 2 and (value[0] is None or value[1] is None):
+                # Open-ended range: keep None as None so JSON serialises it
+                # as null (DocuWare expects null for open range bounds).
+                value = [
+                    self.convert_field_value(v, quote) if v is not None else None
+                    for v in value
+                ]
+            else:
+                value = [self.convert_field_value(v, quote) for v in value]
         else:
             value = [self.convert_field_value(value, quote)]
         return field.id, value
