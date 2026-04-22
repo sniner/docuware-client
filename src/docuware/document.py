@@ -3,9 +3,12 @@ from __future__ import annotations
 import logging
 import mimetypes
 import pathlib
-from typing import IO, Any, Dict, Optional, Tuple, Union
+from typing import IO, TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 from docuware import cijson, errors, fields, structs, types, utils
+
+if TYPE_CHECKING:
+    from docuware import filecabinet
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +79,7 @@ class Document:
 
     def archive(
         self,
-        target: types.FileCabinetP,
+        target: "filecabinet.FileCabinet",
         fields: Optional[Dict[str, Any]] = None,
         *,
         keep_source: bool = False,
@@ -120,7 +123,7 @@ class Document:
             raise errors.DataError("archive: document has no id")
 
         item: Dict[str, Any] = {"id": self.id, "fields": fields}
-        results = target.transfer(  # type: ignore[attr-defined]
+        results = target.transfer(
             source=self.file_cabinet,
             documents=[item],
             keep_source=keep_source,

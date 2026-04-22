@@ -321,15 +321,10 @@ class FileCabinetP(IdNameP, Protocol):
 
     def get_document(self, doc_id: Union[str, int]) -> DocumentP: ...
 
-    def transfer(
-        self,
-        source: Union[FileCabinetP, str],
-        documents: Any,
-        *,
-        keep_source: bool = False,
-        fill_intellix: bool = False,
-        use_default_dialog: bool = False,
-    ) -> List[Any]: ...
+    # Note: ``transfer`` is intentionally not part of this protocol — the
+    # method's signature uses concrete container types (``Sequence[Document]``)
+    # whose strict-mode protocol conformance with ``Sequence[DocumentP]`` is
+    # awkward.  It lives on the concrete :class:`docuware.filecabinet.FileCabinet`.
 
 
 class SearchFieldP(IdNameP, Protocol):

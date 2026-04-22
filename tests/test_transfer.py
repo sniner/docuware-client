@@ -391,6 +391,7 @@ class TestFieldValidationHints(unittest.TestCase):
         )
         self.assertEqual(f.length, 34)
         self.assertEqual(f.mask, "^[A-Z]{2}[0-9]{2}.*$")
+        assert f.mask_error_text is not None
         self.assertTrue(f.mask_error_text.startswith("IBAN"))
         self.assertFalse(f.not_empty)
 

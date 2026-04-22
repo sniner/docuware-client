@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Union, overload
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Sequence, Union, overload
 
 from docuware import dialogs, document, errors, structs, types
 
@@ -125,7 +125,7 @@ class FileCabinet:
         keep_source: bool = False,
         fill_intellix: bool = False,
         use_default_dialog: bool = False,
-    ) -> List["document.Document"]:
+    ) -> Sequence["document.Document"]:
         """Transfer documents from ``source`` (a basket or file cabinet) into this cabinet.
 
         This is the generic, batch-friendly form. It posts to the ``transfer``
