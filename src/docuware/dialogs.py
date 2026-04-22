@@ -115,6 +115,35 @@ class StoreDialog(Dialog):
         self._load()
         return self._fields or {}
 
+    @property
+    def required_fields(self) -> Dict[str, types.SearchFieldP]:
+        """Fields with ``NotEmpty=True`` — must be provided when archiving/storing.
+
+        Note: the server is the authoritative source for validation (including
+        dialog-level mandatory rules and conditional logic added in 7.1+).
+        This helper reflects the field-level ``NotEmpty`` flag only and is
+        intended as a best-effort client-side hint.
+        """
+        return {fid: f for fid, f in self.fields.items() if getattr(f, "not_empty", False)}
+
+    def validate_fields(self, values: Dict[str, Any]) -> List[str]:
+        """Return a list of missing required field ids/labels given ``values``.
+
+        Only checks the field-level ``NotEmpty`` flag. Empty strings and ``None``
+        count as missing. Use this as a client-side pre-flight before an archive
+        call to avoid a round-trip that the server would otherwise reject.
+        """
+        missing: List[str] = []
+        # Match by id (DBFieldName) or by label (DlgLabel), case-insensitive
+        provided = {str(k).casefold() for k, v in values.items() if v not in (None, "")}
+        for fid, f in self.required_fields.items():
+            if fid.casefold() in provided:
+                continue
+            if getattr(f, "name", "").casefold() in provided:
+                continue
+            missing.append(fid)
+        return missing
+
 
 class ResultListDialog(Dialog):
     pass
@@ -188,7 +217,23 @@ class SearchField:
         self.name: str = config.get("DlgLabel", self.id)
         self.length: int = config.get("Length", -1)
         self.type: Optional[str] = config.get("DWFieldType")
+        # DocuWare marks required store-dialog fields via the NotEmpty attribute:
+        # "Determines whether the field can be empty, considering NotEmpty in Field
+        # settings and Field may be empty right." (see DialogFieldBase in the SDK).
+        # Note: this reflects field-level settings, not the dialog-level mandatory
+        # rules introduced in 7.1 — those are evaluated server-side on store/transfer.
+        self.not_empty: bool = bool(config.get("NotEmpty", False))
+        self.read_only: bool = bool(config.get("ReadOnly", False))
+        self.locked: bool = bool(config.get("Locked", False))
+        self.mask: Optional[str] = config.get("Mask") or None
+        self.mask_error_text: Optional[str] = config.get("MaskErrorText") or None
+        self.select_list_only: bool = bool(config.get("SelectListOnly", False))
         self.endpoints = structs.Endpoints(config)
+
+    @property
+    def required(self) -> bool:
+        """Alias for ``not_empty``. True if the field must be filled on store/transfer."""
+        return self.not_empty
 
     def values(self) -> List[Any]:
         if "simpleSelectList" in self.endpoints:
@@ -197,10 +242,16 @@ class SearchField:
         return []
 
     def __str__(self) -> str:
+        flags = []
+        if self.not_empty:
+            flags.append("required")
+        if self.read_only:
+            flags.append("readonly")
+        suffix = f" ({', '.join(flags)})" if flags else ""
         if self.length > 0:
-            return f"Field '{self.name}' [{self.id}, {self.type}({self.length})]"
+            return f"Field '{self.name}' [{self.id}, {self.type}({self.length})]{suffix}"
         else:
-            return f"Field '{self.name}' [{self.id}, {self.type}]"
+            return f"Field '{self.name}' [{self.id}, {self.type}]{suffix}"
 
 
 class ConditionParser:

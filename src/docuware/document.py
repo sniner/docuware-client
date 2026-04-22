@@ -74,6 +74,69 @@ class Document:
         else:
             self._deleted = True
 
+    def archive(
+        self,
+        target: types.FileCabinetP,
+        fields: Optional[Dict[str, Any]] = None,
+        *,
+        keep_source: bool = False,
+        fill_intellix: bool = False,
+        use_default_dialog: bool = False,
+    ) -> "Document":
+        """Archive (transfer) this document from its basket/cabinet to ``target``.
+
+        This is the common inbox-to-archive use case: move (or copy) a single
+        document out of a basket into a file cabinet, optionally overriding or
+        supplying the index field values required by the destination.
+
+        Args:
+            target: The destination :class:`~docuware.filecabinet.FileCabinet`.
+            fields: Optional index values for the destination cabinet. Supply
+                this to fill fields that are mandatory on the destination
+                store dialog but missing on the source document (for example
+                ``DOCTYPE``, ``COMPANY``, ``DOCDATE``). Keys may be either
+                the database field name (``DBFieldName``) or the dialog label
+                (``DlgLabel``). Values are serialised according to their
+                Python type.
+            keep_source: If ``True``, the document remains in the source
+                (copy). If ``False`` (default), it is moved out of the source.
+            fill_intellix: If ``True``, Intellix index-data suggestions are
+                applied. Defaults to ``False``.
+            use_default_dialog: If ``True`` and a default store dialog is
+                assigned to the user, it is used. Defaults to ``False``.
+
+        Returns:
+            The newly stored :class:`Document` in the destination cabinet.
+
+        Raises:
+            docuware.errors.DataError: if the document has been deleted or
+                has no id.
+            docuware.errors.ResourceError: if the server rejects the transfer
+                — most commonly because a mandatory field is missing or a
+                value violates the destination field's ``Mask`` or ``Length``.
+        """
+        self._assert_alive()
+        if self.id is None:
+            raise errors.DataError("archive: document has no id")
+
+        item: Dict[str, Any] = {"id": self.id, "fields": fields}
+        results = target.transfer(  # type: ignore[attr-defined]
+            source=self.file_cabinet,
+            documents=[item],
+            keep_source=keep_source,
+            fill_intellix=fill_intellix,
+            use_default_dialog=use_default_dialog,
+        )
+        if not keep_source:
+            # The source document no longer exists; mark it as deleted so
+            # further operations on this instance fail loudly.
+            self._deleted = True
+        if not results:
+            raise errors.ApiError(
+                f"archive: server returned no document for id {self.id!r}"
+            )
+        return results[0]
+
     def update(self, fields: Dict[str, Any]) -> Document:
         self._assert_alive()
         json_fields = []

@@ -321,6 +321,16 @@ class FileCabinetP(IdNameP, Protocol):
 
     def get_document(self, doc_id: Union[str, int]) -> DocumentP: ...
 
+    def transfer(
+        self,
+        source: Union[FileCabinetP, str],
+        documents: Any,
+        *,
+        keep_source: bool = False,
+        fill_intellix: bool = False,
+        use_default_dialog: bool = False,
+    ) -> List[Any]: ...
+
 
 class SearchFieldP(IdNameP, Protocol):
     @property

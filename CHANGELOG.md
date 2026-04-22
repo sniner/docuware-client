@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Archive / transfer documents** from a basket (inbox) to a file cabinet:
+  - `Document.archive(target, fields=..., keep_source=..., ...)` — single-document
+    convenience wrapper.
+  - `FileCabinet.transfer(source, documents, ...)` — batch form; accepts document
+    ids, `Document` instances, or mappings with per-document field overrides. Picks
+    the most appropriate body (`FileCabinetTransferInfo` when no overrides are
+    supplied, `DocumentsTransferInfo` otherwise).
+  - Maps to the DocuWare REST API's `transfer` relation on the destination file
+    cabinet (`POST /DocuWare/Platform/FileCabinets/{id}/Transfer`) and supports
+    the `KeepSource`, `FillIntellix`, and `UseDefaultDialog` flags.
+- **Field validation hints** on `SearchField`:
+  `not_empty` (alias `required`), `read_only`, `locked`, `mask`,
+  `mask_error_text`, `select_list_only`. Exposes DocuWare's
+  `NotEmpty`/`ReadOnly`/`Mask`/… field-level attributes so callers can tell
+  up front what the server will require on archive.
+- **`StoreDialog.required_fields`** and **`StoreDialog.validate_fields(values)`** —
+  list the mandatory fields of the archive's store dialog and run a client-side
+  pre-check before an `archive()` call.
+- New example: `examples/archive_from_basket.py`.
+
 ## [0.7.10] - 2026-04-07
 
 ### Fixed

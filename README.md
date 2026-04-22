@@ -223,6 +223,130 @@ for result in dlg.search(["FIELD1=TERM1,TERM2", "FIELD2=TERM3"]):
     document.delete()
 ```
 
+### Archiving a document from a basket (inbox) to a file cabinet
+
+Archiving is the inbox-to-archive workflow: a document sitting in a DocuWare
+basket (document tray / "Inbox") is transferred into a proper file cabinet,
+at which point the mandatory index fields of that cabinet must be filled in.
+Under the hood this maps to a `POST` on the destination cabinet's `transfer`
+relation — the same operation the DocuWare REST API exposes as
+`FileCabinetTransferInfo` / `DocumentsTransferInfo`.
+
+The simplest case — move a single document:
+
+```python
+basket = org.basket("Inbox", required=True)
+archive = org.file_cabinet("Archive", required=True)
+
+doc = basket.get_document("42")
+archived = doc.archive(archive)     # default: keep_source=False → move
+# `doc` is now marked as deleted; `archived` is the document in the archive.
+```
+
+If the archive requires index fields the source document doesn't have (this
+is the common case — inbox documents usually carry little or no index data),
+pass them via `fields=`:
+
+```python
+from datetime import date
+
+archived = doc.archive(
+    archive,
+    fields={
+        "DOCTYPE":  "Invoice",
+        "COMPANY":  "ACME GmbH",
+        "DOCDATE":  date(2026, 4, 22),
+        "AMOUNT":   199.90,
+    },
+)
+```
+
+Keys may be either the database field name (`DBFieldName`) or the dialog
+label. Values are serialised according to their Python type (`str`, `int`,
+`float`, `bool`, `date`/`datetime`).
+
+Pass `keep_source=True` to **copy** instead of move:
+
+```python
+# Document stays in the basket; a copy is created in the archive
+archived = doc.archive(archive, keep_source=True)
+```
+
+Additional flags mirror the DocuWare API:
+
+- `fill_intellix=True` — apply Intellix index-data suggestions on the
+  destination cabinet's default assigned dialog.
+- `use_default_dialog=True` — use the user's default store dialog for the
+  destination (affects default values and validation).
+
+#### Mandatory fields and validation
+
+The destination cabinet's **store dialog** determines which fields must be
+filled when a document is archived. The server enforces this and rejects the
+transfer with a `ResourceError` if requirements aren't met. Each field's
+settings are exposed on the store dialog's fields:
+
+| Attribute          | Meaning                                                    |
+|--------------------|------------------------------------------------------------|
+| `not_empty` / `required` | Field must have a value (DocuWare's `NotEmpty`). |
+| `length`           | Maximum length of text fields.                             |
+| `mask`             | Regular expression the value must match.                   |
+| `mask_error_text`  | Human-readable message if the mask doesn't match.          |
+| `read_only`        | Field cannot be set by the client.                         |
+| `select_list_only` | Value must come from the field's select list.              |
+
+You can inspect the store dialog of the destination cabinet up front and run
+a client-side pre-check before calling `archive()`:
+
+```python
+store_dlg = next(
+    dlg for dlg in archive.dialogs
+    if isinstance(dlg, docuware.dialogs.StoreDialog)
+)
+
+# List the fields DocuWare will insist on:
+for fid, f in store_dlg.required_fields.items():
+    print(f"required: {fid} ({f.name}, {f.type})")
+
+# Pre-check the values you're about to submit:
+values = {"DOCTYPE": "Invoice", "COMPANY": "ACME"}
+missing = store_dlg.validate_fields(values)
+if missing:
+    raise RuntimeError(f"Still missing: {missing}")
+
+doc.archive(archive, fields=values)
+```
+
+`validate_fields()` is a best-effort local check against the field-level
+`NotEmpty` flag; the authoritative validation (mask, length, dialog-level
+mandatory rules added in 7.1+, conditional rules, user rights) still happens
+on the server.
+
+#### Archiving several documents at once
+
+For batch archiving — for example, processing all documents currently in a
+basket — use the destination cabinet's `transfer()` method directly:
+
+```python
+# Move every document out of the basket into the archive, tagging them all
+# with the same DOCTYPE:
+docs_to_archive = [
+    {"id": d.id, "fields": {"DOCTYPE": "Invoice"}}
+    for d in basket_docs
+]
+archived_docs = archive.transfer(
+    source=basket,
+    documents=docs_to_archive,
+    keep_source=False,
+)
+```
+
+Items may be plain ids, `Document` objects, or mappings with per-document
+field overrides (as shown above). If no item carries overrides, the client
+sends the smaller `FileCabinetTransferInfo` body and the source document's
+existing index data is preserved on the destination.
+
+
 Users and groups of an organisation can be accessed and managed:
 
 ```python
