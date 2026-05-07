@@ -6,7 +6,7 @@ import os
 import pathlib
 from typing import Any, Callable, Dict, Iterator, Optional, Union
 
-from docuware import auth, conn, errors, organization, structs, types
+from docuware import auth, conn, errors, organization, persistence, structs, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -135,10 +135,7 @@ def connect(
 
         if file_creds != new_creds:
             try:
-                credentials_file.parent.mkdir(exist_ok=True, parents=True)
-                with open(credentials_file, "w", encoding="utf-8") as f:
-                    json.dump(new_creds, f, indent=4)
-                os.chmod(credentials_file, 0o600)
+                utils.atomic_json_write(credentials_file, new_creds, indent=4)
             except OSError as exc:
                 log.warning("Failed to save credentials to %s: %s", credentials_file, exc)
 
@@ -147,12 +144,13 @@ def connect(
 
 def connect_with_tokens(
     url: str,
-    access_token: str,
-    refresh_token: str,
-    token_endpoint: str,
-    client_id: str,
+    access_token: str = "",
+    refresh_token: str = "",
+    token_endpoint: str = "",
+    client_id: str = "",
     *,
     client_secret: str = "",
+    token_store: Optional[persistence.TokenStore] = None,
     on_token_refresh: Optional[Callable[[Dict[str, Any]], None]] = None,
     verify_certificate: bool = True,
     timeout: Optional[float] = None,
@@ -166,16 +164,31 @@ def connect_with_tokens(
     Note: this function does *not* call :func:`~docuware.oauth.discover_oauth_endpoints`
     — the caller must resolve the token_endpoint beforehand.
 
+    DocuWare rotates refresh tokens (RFC 6749 §10.4) and revokes the entire
+    token family on reuse. Production callers should pass a ``token_store``
+    so the rotated tokens are persisted across process restarts; otherwise
+    the next start will fail with ``invalid_grant`` and force a fresh PKCE
+    login.
+
     Args:
         url:              DocuWare Platform base URL.
-        access_token:     OAuth2 access token.
-        refresh_token:    OAuth2 refresh token.
+        access_token:     OAuth2 access token. Optional when ``token_store``
+                          already contains tokens; required otherwise.
+        refresh_token:    OAuth2 refresh token. Optional when ``token_store``
+                          already contains tokens; required otherwise.
         token_endpoint:   Token endpoint URL (from OpenID Connect discovery).
         client_id:        OAuth2 client ID.
         client_secret:    OAuth2 client secret — required for confidential clients
                           (web apps), empty for public/native clients (default).
+        token_store:      Optional :class:`~docuware.TokenStore` adapter.  If
+                          set, ``load()`` is consulted for the initial tokens
+                          (falling back to the explicit ``access_token`` /
+                          ``refresh_token`` arguments as a bootstrap seed),
+                          and ``save()`` is wired in as the rotation callback.
+                          Mutually exclusive with ``on_token_refresh``.
         on_token_refresh: Optional callback(tokens: dict) called after each
                           successful token refresh — use it to persist new tokens.
+                          Mutually exclusive with ``token_store``.
         verify_certificate: Whether to verify TLS certificates (default True).
         timeout:          Request timeout in seconds.  Defaults to the value of
                           the ``DW_TIMEOUT`` environment variable, or 30 s if not set.
@@ -183,6 +196,48 @@ def connect_with_tokens(
     Returns:
         Connected DocuwareClient instance.
     """
+    if token_store is not None:
+        if on_token_refresh is not None:
+            raise ValueError(
+                "token_store and on_token_refresh are mutually exclusive — "
+                "the store's save() is used as the refresh callback"
+            )
+        bundle = token_store.load()
+        if bundle:
+            stored_access = bundle.get("access_token", "")
+            stored_refresh = bundle.get("refresh_token", "")
+            if not (stored_access and stored_refresh):
+                raise errors.AccountError(
+                    "token_store returned an incomplete bundle "
+                    "(missing access_token or refresh_token)"
+                )
+            if (access_token and access_token != stored_access) or (
+                refresh_token and refresh_token != stored_refresh
+            ):
+                log.info(
+                    "token_store contains tokens; ignoring explicit access_token/refresh_token"
+                )
+            access_token = stored_access
+            refresh_token = stored_refresh
+        elif access_token and refresh_token:
+            # Bootstrap: seed the empty store with the supplied tokens so a
+            # crash before the first refresh does not lose them.
+            token_store.save({"access_token": access_token, "refresh_token": refresh_token})
+        else:
+            raise errors.AccountError(
+                "token_store is empty and no explicit access_token/refresh_token "
+                "given — run the PKCE login first to seed the store"
+            )
+        on_token_refresh = token_store.save
+
+    if not access_token or not refresh_token:
+        raise errors.AccountError(
+            "access_token and refresh_token are required "
+            "(or supply a populated token_store)"
+        )
+    if not token_endpoint or not client_id:
+        raise errors.AccountError("token_endpoint and client_id are required")
+
     authenticator = auth.TokenAuthenticator(
         access_token=access_token,
         refresh_token=refresh_token,

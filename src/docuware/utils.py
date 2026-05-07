@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import secrets
 import re
+import tempfile
 from datetime import date, datetime
 from typing import Any, Optional, Union
 
@@ -148,6 +150,43 @@ def write_binary_file(blob: bytes, path: Union[str, pathlib.Path]) -> pathlib.Pa
     with open(path, "wb") as f:
         f.write(blob)
     return path
+
+
+def atomic_json_write(
+    path: Union[str, pathlib.Path],
+    data: Any,
+    *,
+    mode: int = 0o600,
+    indent: Optional[int] = None,
+) -> None:
+    """Write ``data`` as JSON to ``path`` atomically.
+
+    Writes to a temporary file in the same directory, fsyncs, ``chmod``s
+    to ``mode`` (default 0o600 — sensitive material), then ``os.replace``s
+    over the destination. A crash mid-write therefore cannot leave a
+    half-written file at ``path``; the previous content remains intact.
+
+    The parent directory is created if it does not exist.
+    """
+    path = pathlib.Path(path)
+    path.parent.mkdir(exist_ok=True, parents=True)
+
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=indent)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp_path, mode)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def random_password(length: int = 16) -> str:

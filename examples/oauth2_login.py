@@ -56,16 +56,47 @@ Usage:
 from __future__ import annotations
 
 import http.server
+import json
+import pathlib
 import secrets
 import time
 import urllib.parse
 import webbrowser
+from typing import Any, Dict, Optional
 
 import docuware
 
 CALLBACK_PORT = 18923
 CALLBACK_PATH = "/callback"
 REDIRECT_URI = f"http://localhost:{CALLBACK_PORT}{CALLBACK_PATH}"
+
+TOKEN_STORE_PATH = pathlib.Path.home() / ".config" / "docuware-client" / "tokens.json"
+
+
+# ---------------------------------------------------------------------------
+# Reference TokenStore — JSON file with atomic writes
+# ---------------------------------------------------------------------------
+#
+# DocuWare rotates refresh tokens on every refresh and revokes the entire
+# token family if a stale refresh token is reused (RFC 6749 §10.4). The
+# library therefore calls TokenStore.save() after every successful refresh
+# so the next process start sees the rotated bundle. save() MUST be atomic
+# — a half-written file would lose the only valid refresh token and force
+# a full PKCE re-login.
+class JsonFileTokenStore(docuware.TokenStore):
+    """Persist OAuth2 tokens as a JSON file (mode 0o600, atomic writes)."""
+
+    def __init__(self, path: pathlib.Path) -> None:
+        self.path = path
+
+    def load(self) -> Optional[Dict[str, Any]]:
+        if not self.path.exists():
+            return None
+        with open(self.path, encoding="utf-8") as f:
+            return json.load(f)
+
+    def save(self, tokens: Dict[str, Any]) -> None:
+        docuware.atomic_json_write(self.path, tokens, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -216,8 +247,11 @@ def main() -> None:
     print(f"  expires_in:    {tokens.get('expires_in')} seconds")
     print()
 
-    # --- Step 7: connect and verify ---
-    print("Connecting to DocuWare with the obtained tokens...")
+    # --- Step 7: persist tokens and connect ---
+    store = JsonFileTokenStore(TOKEN_STORE_PATH)
+    print(f"Persisting tokens to {TOKEN_STORE_PATH}")
+    print("(rotated tokens will be written here automatically on every refresh)")
+    print()
     try:
         client = docuware.connect_with_tokens(
             url=docuware_url,
@@ -225,6 +259,7 @@ def main() -> None:
             refresh_token=tokens.get("refresh_token", ""),
             token_endpoint=endpoints.token_endpoint,
             client_id=client_id,
+            token_store=store,
         )
     except Exception as exc:
         print(f"Connection failed: {exc}")
@@ -238,16 +273,22 @@ def main() -> None:
         for fc in org.file_cabinets:
             print(f"    - {fc.name}")
     print()
-    print("Reusable snippet for your own code:")
+    print("Reusable snippet for subsequent runs (no PKCE login needed):")
     print()
     print("  import docuware")
+    print(f"  store = JsonFileTokenStore({str(TOKEN_STORE_PATH)!r})")
     print("  client = docuware.connect_with_tokens(")
     print(f"      url={docuware_url!r},")
-    print("      access_token=tokens['access_token'],")
-    print("      refresh_token=tokens['refresh_token'],")
     print(f"      token_endpoint={endpoints.token_endpoint!r},")
     print(f"      client_id={client_id!r},")
+    print("      token_store=store,")
     print("  )")
+    print()
+    print("Why a TokenStore is not optional:")
+    print("  DocuWare rotates the refresh token on every refresh and revokes the")
+    print("  entire token family if the previous refresh token is reused (RFC 6749")
+    print("  §10.4). Without persistence, the next process start would fail with")
+    print("  'invalid_grant' and force a fresh PKCE login.")
     print()
 
 
