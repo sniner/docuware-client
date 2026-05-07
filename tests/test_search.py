@@ -168,7 +168,8 @@ class TestSearchFlow(unittest.TestCase):
         result_list = list(results)
         self.assertEqual(len(result_list), 1)
         self.assertEqual(result_list[0].title, "Invoice 1")
-        # SearchResultItem doesn't have .id, it has .document.id
+        # SearchResultItem.id mirrors Document.id, available without an extra fetch
+        self.assertEqual(result_list[0].id, "doc1")
         self.assertEqual(result_list[0].document.id, "doc1")
 
 

@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`SearchResultItem.id`**: document id is now exposed directly on search result
+  items, mirroring `Document.id`. Avoids the previous workarounds (walking
+  `item.fields` for `DWDOCID` or parsing `endpoints["self"]`) and removes the
+  need to trigger the lazy `item.document` fetch just to read the id
+
 ## [0.7.10] - 2026-04-07
 
 ### Fixed

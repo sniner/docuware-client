@@ -364,6 +364,9 @@ class SearchResultItemP(Protocol):
     def thumbnail(self) -> Tuple[bytes, str, str]: ...
 
     @property
+    def id(self) -> Optional[Any]: ...
+
+    @property
     def title(self) -> Optional[str]: ...
 
     @property

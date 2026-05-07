@@ -31,3 +31,16 @@ def test_search_open_range_lower_bound(dw_search_dialog):
     """Open lower bound: [None, date] must return results, not silently zero."""
     results = dw_search_dialog.search({"DWSTOREDATETIME": [None, date.today()]})
     assert results.count > 0
+
+
+def test_search_result_item_exposes_id(dw_search_dialog):
+    """SearchResultItem.id is populated directly from the search response."""
+    import itertools
+    results = dw_search_dialog.search({"DWSTOREDATETIME": [date(2000, 1, 1), date.today()]})
+    items = list(itertools.islice(results, 3))
+    if not items:
+        import pytest
+        pytest.skip("No documents available to verify id")
+    for item in items:
+        assert item.id is not None
+        assert item.id == item.document.id
