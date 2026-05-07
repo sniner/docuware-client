@@ -5,6 +5,30 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- **`TokenStore`** abstract base class: adapter interface for loading and
+  persisting OAuth2 token bundles across process restarts. Required for any
+  long-running PKCE-based application — DocuWare rotates refresh tokens on
+  every refresh and revokes the entire token family on reuse (RFC 6749 §10.4),
+  so the rotated tokens must be persisted every time. A concrete
+  `JsonFileTokenStore` reference implementation is shown in
+  `examples/oauth2_login.py`
+- **`connect_with_tokens(token_store=...)`**: opt-in parameter that wires a
+  `TokenStore` into the refresh callback automatically. Loads initial tokens
+  from the store, falls back to explicit `access_token` / `refresh_token`
+  arguments as a bootstrap seed (saved immediately), and persists rotated
+  tokens after every refresh
+- **`atomic_json_write()`**: utility for crash-safe JSON file writes (temp +
+  fsync + chmod + rename), used by both the credentials-file save path and
+  `JsonFileTokenStore`
+
+### Changed
+
+- **Credentials file write** in `connect()` is now atomic via
+  `atomic_json_write()`. A crash mid-write can no longer leave the file
+  half-written
+
 ## [0.7.13] - 2026-05-12
 
 ### Fixed

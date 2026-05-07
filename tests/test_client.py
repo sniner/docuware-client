@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from docuware import DocuwareClient, errors
+from docuware import DocuwareClient, TokenStore, errors
 from docuware.client import connect, connect_with_tokens
 from docuware.auth import TokenAuthenticator
 
@@ -186,3 +186,125 @@ def test_connect_with_tokens_passes_callback():
             on_token_refresh=callback,
         )
     assert client.conn.authenticator.on_token_refresh is callback
+
+
+# --- connect_with_tokens() with TokenStore ---
+
+
+class _MemoryTokenStore(TokenStore):
+    """In-memory TokenStore for tests; records every save() call."""
+
+    def __init__(self, initial=None):
+        self._bundle = initial
+        self.saves: list = []
+
+    def load(self):
+        return self._bundle
+
+    def save(self, tokens):
+        self._bundle = dict(tokens)
+        self.saves.append(dict(tokens))
+
+
+def test_connect_with_tokens_uses_store_tokens():
+    store = _MemoryTokenStore({"access_token": "from_store", "refresh_token": "rt_store"})
+    with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
+        client = connect_with_tokens(
+            url=BASE_URL,
+            token_endpoint="https://login.example.com/token",
+            client_id="test-client",
+            token_store=store,
+        )
+    assert client.conn.session.auth.token == "from_store"
+    assert client.conn.authenticator.refresh_token == "rt_store"
+    # Bound-method identity is unstable in Python; compare by underlying function + instance.
+    cb = client.conn.authenticator.on_token_refresh
+    assert cb.__self__ is store and cb.__func__ is _MemoryTokenStore.save
+    assert store.saves == []  # store already populated, no bootstrap save
+
+
+def test_connect_with_tokens_bootstrap_seeds_empty_store():
+    store = _MemoryTokenStore()  # empty
+    with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
+        connect_with_tokens(
+            url=BASE_URL,
+            access_token="at_seed",
+            refresh_token="rt_seed",
+            token_endpoint="https://login.example.com/token",
+            client_id="test-client",
+            token_store=store,
+        )
+    assert len(store.saves) == 1
+    assert store.saves[0] == {"access_token": "at_seed", "refresh_token": "rt_seed"}
+
+
+def test_connect_with_tokens_empty_store_without_seed_raises():
+    store = _MemoryTokenStore()  # empty
+    with pytest.raises(errors.AccountError, match="token_store is empty"):
+        connect_with_tokens(
+            url=BASE_URL,
+            token_endpoint="https://login.example.com/token",
+            client_id="test-client",
+            token_store=store,
+        )
+
+
+def test_connect_with_tokens_store_and_callback_mutually_exclusive():
+    store = _MemoryTokenStore({"access_token": "a", "refresh_token": "r"})
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        connect_with_tokens(
+            url=BASE_URL,
+            token_endpoint="https://login.example.com/token",
+            client_id="test-client",
+            token_store=store,
+            on_token_refresh=lambda t: None,
+        )
+
+
+def test_connect_with_tokens_incomplete_store_bundle_raises():
+    store = _MemoryTokenStore({"access_token": "a"})  # no refresh_token
+    with pytest.raises(errors.AccountError, match="incomplete bundle"):
+        connect_with_tokens(
+            url=BASE_URL,
+            token_endpoint="https://login.example.com/token",
+            client_id="test-client",
+            token_store=store,
+        )
+
+
+def test_connect_with_tokens_refresh_triggers_store_save():
+    """End-to-end: refresh → save() chain populates the store with rotated tokens."""
+    store = _MemoryTokenStore({"access_token": "old_at", "refresh_token": "old_rt"})
+
+    with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
+        client = connect_with_tokens(
+            url=BASE_URL,
+            token_endpoint="https://login.example.com/token",
+            client_id="test-client",
+            token_store=store,
+        )
+
+    # TokenAuthenticator.authenticate() makes a one-shot httpx.post that does
+    # not go through the patched session — patch the call directly.
+    refresh_response = MagicMock()
+    refresh_response.json.return_value = {
+        "access_token": "new_at",
+        "refresh_token": "new_rt",
+        "expires_in": 3600,
+    }
+    refresh_response.raise_for_status.return_value = None
+    with patch("docuware.auth.httpx.post", return_value=refresh_response) as mock_post:
+        client.conn.authenticator.authenticate(client.conn)
+
+    mock_post.assert_called_once()
+    assert client.conn.authenticator.access_token == "new_at"
+    assert client.conn.authenticator.refresh_token == "new_rt"
+    assert len(store.saves) == 1
+    assert store.saves[0]["access_token"] == "new_at"
+    assert store.saves[0]["refresh_token"] == "new_rt"
+
+
+def test_token_store_is_abstract():
+    """TokenStore cannot be instantiated without overriding load/save."""
+    with pytest.raises(TypeError):
+        TokenStore()  # type: ignore[abstract]

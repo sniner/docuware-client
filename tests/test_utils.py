@@ -8,6 +8,7 @@ import pytest
 
 from docuware.errors import DataError, InternalError
 from docuware.utils import (
+    atomic_json_write,
     date_from_string,
     date_to_string,
     datetime_from_string,
@@ -254,3 +255,67 @@ def test_random_password_valid_chars():
     allowed = set("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.,;:-_/+=")
     pw = random_password(200)
     assert all(c in allowed for c in pw)
+
+
+# --- atomic_json_write() ---
+
+def test_atomic_json_write_creates_file(tmp_path):
+    import json
+    path = tmp_path / "out.json"
+    atomic_json_write(path, {"a": 1, "b": [2, 3]})
+    assert json.loads(path.read_text(encoding="utf-8")) == {"a": 1, "b": [2, 3]}
+
+
+def test_atomic_json_write_creates_parent_dir(tmp_path):
+    path = tmp_path / "nested" / "dir" / "out.json"
+    atomic_json_write(path, {"x": 1})
+    assert path.exists()
+
+
+def test_atomic_json_write_default_mode_is_0o600(tmp_path):
+    import os
+    path = tmp_path / "out.json"
+    atomic_json_write(path, {"k": "v"})
+    mode = os.stat(path).st_mode & 0o777
+    assert mode == 0o600
+
+
+def test_atomic_json_write_custom_mode(tmp_path):
+    import os
+    path = tmp_path / "out.json"
+    atomic_json_write(path, {"k": "v"}, mode=0o644)
+    mode = os.stat(path).st_mode & 0o777
+    assert mode == 0o644
+
+
+def test_atomic_json_write_overwrites_existing(tmp_path):
+    import json
+    path = tmp_path / "out.json"
+    path.write_text('{"old": true}', encoding="utf-8")
+    atomic_json_write(path, {"new": True})
+    assert json.loads(path.read_text(encoding="utf-8")) == {"new": True}
+
+
+def test_atomic_json_write_failure_leaves_destination_intact(tmp_path):
+    import json
+    path = tmp_path / "out.json"
+    path.write_text('{"old": true}', encoding="utf-8")
+
+    class _Unserializable:
+        pass
+
+    with pytest.raises(TypeError):
+        atomic_json_write(path, {"bad": _Unserializable()})
+
+    # Original content is still there; no half-written file
+    assert json.loads(path.read_text(encoding="utf-8")) == {"old": True}
+    # No temp file lingering
+    leftovers = [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+    assert leftovers == []
+
+
+def test_atomic_json_write_indent(tmp_path):
+    path = tmp_path / "out.json"
+    atomic_json_write(path, {"a": 1}, indent=2)
+    text = path.read_text(encoding="utf-8")
+    assert "\n" in text  # indented output spans multiple lines

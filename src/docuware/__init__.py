@@ -23,12 +23,14 @@ from docuware.oauth import (
     normalize_docuware_url,
 )
 from docuware.organization import Organization
+from docuware.persistence import TokenStore
 from docuware.textshot import TableZone, TextLine, TextPage, TextShot, TextZone, Word
 from docuware.users import (
     Group,
     User,
 )
 from docuware.utils import (
+    atomic_json_write,
     default_credentials_file,
     quote_value,
     random_password,
@@ -64,11 +66,13 @@ __all__ = [
     "TextShot",
     "TextZone",
     "TokenAuthenticator",
+    "TokenStore",
     "User",
     "UserOrGroupError",
     "Word",
     "DW_OAUTH_SCOPES",
     "OAuthEndpoints",
+    "atomic_json_write",
     "build_authorization_url",
     "connect",
     "connect_with_tokens",
