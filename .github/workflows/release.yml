@@ -33,6 +33,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Need the tagged commit's full message for release notes;
+          # default shallow clone strips the body.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -43,13 +47,21 @@ jobs:
       - name: Build package
         run: uv build
 
+      - name: Extract release notes from tag commit
+        # Release notes = body of the tagged release-prep commit, minus the
+        # Co-Authored-By trailer. Lets the commit message drive the release
+        # description instead of GitHub's auto-generated PR/commit list.
+        run: |
+          git log -1 --pretty=%b "$GITHUB_REF_NAME" \
+            | sed '/^Co-Authored-By:/d' > release-notes.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.whl
             dist/*.tar.gz
-          generate_release_notes: true
+          body_path: release-notes.md
 
   build-windows:
     runs-on: windows-latest
