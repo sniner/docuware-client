@@ -349,6 +349,7 @@ class SearchResult:
 class SearchResultItem:
     def __init__(self, config: Dict, result: SearchResult):
         self.result = result
+        self.id = config.get("Id")
         self.fields = [fields.FieldValue.from_config(f) for f in config.get("Fields", [])]
         self.content_type = config.get("ContentType")
         self.title = config.get("Title")
