@@ -1,12 +1,16 @@
 # docuware-client
 
 This is a client library for the REST API of [DocuWare][1] DMS. Since
-DocuWare provides no official developer documentation for the REST API beyond
-XSD schema files, this client covers only a part of the API's functionality.
+DocuWare does not appear to publish official developer documentation for the
+REST API beyond XSD schema files, this client covers only a part of the
+API's functionality.
 
 Please keep in mind: **This is an independent project with no affiliation to
-DocuWare GmbH.** It is a work in progress, may yield unexpected results, and
-almost certainly contains bugs.
+DocuWare GmbH.**
+
+> **Looking to connect an LLM to DocuWare?** Have a look at the sister
+> project [docuware-mcp][3] (also on PyPI) — an MCP server built on top of
+> this library that exposes DocuWare to LLM clients like Claude Desktop.
 
 > **Breaking change in 0.7.0 — OAuth2 only**
 >
@@ -399,3 +403,4 @@ this software as long as the copyright notice is preserved.
 
 [1]: https://docuware.com/
 [2]: https://developer.docuware.com/rest/index.html
+[3]: https://github.com/sniner/docuware-mcp
