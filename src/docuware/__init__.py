@@ -23,6 +23,7 @@ from docuware.oauth import (
     normalize_docuware_url,
 )
 from docuware.organization import Organization
+from docuware.textshot import TextLine, TextPage, TextShot, TextZone, Word
 from docuware.users import (
     Group,
     User,
@@ -57,9 +58,14 @@ __all__ = [
     "ResourceNotFoundError",
     "SearchConditionError",
     "SearchDialog",
+    "TextLine",
+    "TextPage",
+    "TextShot",
+    "TextZone",
     "TokenAuthenticator",
     "User",
     "UserOrGroupError",
+    "Word",
     "DW_OAUTH_SCOPES",
     "OAuthEndpoints",
     "build_authorization_url",

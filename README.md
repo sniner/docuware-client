@@ -199,6 +199,26 @@ for result in dlg.search("DOCNO=123456"):
         docuware.write_binary_file(data, filename)
 ```
 
+For fulltext-indexed file cabinets, the OCR'd text of each attachment can be
+retrieved directly — handy for feeding documents into search indexes or LLMs:
+
+```python
+for result in dlg.search("DOCNO=123456"):
+    for att in result.document.attachments:
+        # Plain text — pages joined by form feed (\f), lines by \n:
+        print(att.text())
+
+        # Or get the structured object (pages → zones → lines → words with coordinates):
+        ts = att.textshot()
+        for page in ts.pages:
+            print(f"page lang={page.language}, {len(list(page.words()))} words")
+```
+
+`textshot()` returns a `TextShot` mirroring DocuWare's `intellix:DocumentContent`
+schema; word coordinates are in twips (1/1440 inch). A `DataError` is raised if
+the file cabinet is not fulltext-indexed or the document has not yet been
+processed by the OCR pipeline.
+
 Create a new document with index fields:
 
 ```python

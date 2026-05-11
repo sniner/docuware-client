@@ -5,7 +5,7 @@ import mimetypes
 import pathlib
 from typing import IO, Any, Dict, Optional, Tuple, Union
 
-from docuware import cijson, errors, fields, structs, types, utils
+from docuware import cijson, errors, fields, structs, textshot, types, utils
 
 log = logging.getLogger(__name__)
 
@@ -203,8 +203,8 @@ class DocumentAttachment:
     def client(self) -> types.DocuwareClientP:
         return self.document.client
 
-    def _fetch_endpoints(self) -> None:
-        if "fileDownload" not in self.endpoints:
+    def _fetch_endpoints(self, required: str = "fileDownload") -> None:
+        if required not in self.endpoints:
             config = self.client.conn.get_json(self.endpoints["self"])
             self.endpoints = structs.Endpoints(config)
 
@@ -216,6 +216,19 @@ class DocumentAttachment:
             keep_annotations=keep_annotations,
         )
         return data, mime, self.filename or filename
+
+    def textshot(self) -> textshot.TextShot:
+        self._fetch_endpoints(required="textshot")
+        endpoint = self.endpoints.get("textshot")
+        if not endpoint:
+            raise errors.DataError(
+                "Attachment has no textshot endpoint; "
+                "the file cabinet may not be fulltext-indexed or the document has not been processed yet"
+            )
+        return textshot.TextShot(self.client.conn.get_json(endpoint))
+
+    def text(self) -> str:
+        return self.textshot().text
 
     def delete(self) -> None:
         if "self" not in self.endpoints:

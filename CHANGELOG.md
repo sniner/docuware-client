@@ -5,8 +5,15 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.7.11] - 2026-05-11
+
 ### Added
 
+- **`DocumentAttachment.textshot()` / `.text()`**: retrieve the OCR full-text of
+  a document section. `textshot()` returns a `TextShot` object that mirrors the
+  DocuWare `intellix:DocumentContent` schema (pages, zones, lines, words with
+  coordinates), `text()` is a shortcut for the flat plain-text view. Useful for
+  passing document content to downstream consumers like search indexers or LLMs
 - **`SearchResultItem.id`**: document id is now exposed directly on search result
   items, mirroring `Document.id`. Avoids the previous workarounds (walking
   `item.fields` for `DWDOCID` or parsing `endpoints["self"]`) and removes the
