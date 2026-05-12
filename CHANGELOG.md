@@ -5,6 +5,25 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.7.12] - 2026-05-12
+
+### Added
+
+- **`SearchDialog.search(order_by=...)`**: sort search results server-side by one or more
+  fields. Accepts a list of `(field, direction)` tuples, e.g.
+  `order_by=[("Belegdatum", "desc"), ("Bestellnummer", "asc")]`. Field names can be the
+  DB-name (`BELEGDATUM`) or the display label (`Belegdatum`). Directions are case-insensitive:
+  `asc`, `desc`, `default`. Especially useful for MCP-style "give me the latest X" queries
+  that would otherwise need to load all hits and sort client-side
+- **CLI `--order-by`**: `dw-client search ... --order-by FIELD[:asc|desc]`, repeatable for
+  multi-field sort
+
+### Changed
+
+- **Search request path**: all searches now go through DocuWare's `DialogExpression`
+  endpoint directly. The previous two-step `DialogExpressionLink` → result-URL → GET
+  is removed, saving one HTTP roundtrip per search. No API change for callers
+
 ## [0.7.11] - 2026-05-11
 
 ### Added

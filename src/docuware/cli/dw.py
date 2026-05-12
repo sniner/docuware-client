@@ -82,6 +82,17 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Preserve annotations on downloaded documents",
     )
+    search_parser.add_argument(
+        "--order-by",
+        action="append",
+        default=None,
+        metavar="FIELD[:asc|desc]",
+        help=(
+            "Sort the result by a field (default direction: asc). "
+            "May be given multiple times for multi-field sort, "
+            "e.g. --order-by Belegdatum:desc --order-by Bestellnummer:asc"
+        ),
+    )
     search_parser.add_argument("conditions", nargs="*", help="Search terms: FIELDNAME=VALUE")
 
     get_parser = subparsers.add_parser("get", description="Get a document by ID")
@@ -188,7 +199,17 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     if dlg is None:
         return 0
 
-    res = dlg.search(args.conditions)
+    order_by: Optional[List[tuple]] = None
+    if args.order_by:
+        order_by = []
+        for spec in args.order_by:
+            if ":" in spec:
+                field, direction = spec.split(":", 1)
+            else:
+                field, direction = spec, "asc"
+            order_by.append((field.strip(), direction.strip()))
+
+    res = dlg.search(args.conditions, order_by=order_by)
 
     for n, item in enumerate(res):
         doc = item.document

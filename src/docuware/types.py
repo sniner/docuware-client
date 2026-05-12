@@ -344,6 +344,9 @@ class DialogP(IdNameP, Protocol):
 
 SearchConditionsT = Union[str, List[str], Tuple[str], Dict[str, Union[str, List[Optional[str]]]]]
 
+# (field_name_or_id, direction) — direction is "asc" | "desc" | "default" (case-insensitive)
+OrderByT = Sequence[Tuple[str, str]]
+
 
 class SearchDialogP(DialogP, Protocol):
     @property

@@ -1,13 +1,16 @@
+import json as _json
 import unittest
 
 import httpx
 
 from docuware import DocuwareClient
+from docuware.errors import SearchConditionError
 
 
 class TestSearchFlow(unittest.TestCase):
     def setUp(self):
         self.client = DocuwareClient("https://example.com")
+        self.captured_bodies: list = []
 
         def handler(request: httpx.Request):
             path = request.url.path
@@ -94,7 +97,12 @@ class TestSearchFlow(unittest.TestCase):
                                 "DBFieldName": "COMPANY",
                                 "DlgLabel": "Company",
                                 "DWFieldType": "String",
-                            }
+                            },
+                            {
+                                "DBFieldName": "BELEGDATUM",
+                                "DlgLabel": "Belegdatum",
+                                "DWFieldType": "Date",
+                            },
                         ],
                         "Query": {
                             "Links": [
@@ -102,17 +110,16 @@ class TestSearchFlow(unittest.TestCase):
                                     "rel": "dialogExpression",
                                     "href": "/DocuWare/Platform/FileCabinets/fc1/Query/DialogExpression",
                                 },
-                                {
-                                    "rel": "dialogExpressionLink",
-                                    "href": "/DocuWare/Platform/FileCabinets/fc1/Query/DialogExpressionLink",
-                                },
                             ]
                         },
                     },
                 )
-            elif "/DialogExpressionLink" in path:
-                return httpx.Response(200, text="/DocuWare/Platform/Results/123\n")
-            elif "/Results/123" in path:
+            elif "/DialogExpression" in path:
+                # Capture the JSON body so tests can assert SortOrder shape.
+                try:
+                    self.captured_bodies.append(_json.loads(request.content.decode()))
+                except Exception:
+                    self.captured_bodies.append(None)
                 return httpx.Response(
                     200,
                     json={
@@ -151,26 +158,84 @@ class TestSearchFlow(unittest.TestCase):
 
         self.client.conn.session = httpx.Client(transport=httpx.MockTransport(handler))
 
-    def test_search_workflow(self):
-        # 1. Login
+    def _dlg(self):
+        """Log in and return a ready-to-use SearchDialog."""
         self.client.login("user", "pass")
-
-        # 2. Get FC and Search Dialog
         org = self.client.organization("Test Org")
         assert org is not None
         fc = org.file_cabinet("Archive", required=True)
-        dlg = fc.search_dialog("Default Search", required=True)
+        return fc.search_dialog("Default Search", required=True)
 
-        # 3. Perform Search
+    def test_search_workflow(self):
+        dlg = self._dlg()
         results = dlg.search("COMPANY=ACME")
-
-        # 4. Verify
         result_list = list(results)
         self.assertEqual(len(result_list), 1)
         self.assertEqual(result_list[0].title, "Invoice 1")
         # SearchResultItem.id mirrors Document.id, available without an extra fetch
         self.assertEqual(result_list[0].id, "doc1")
         self.assertEqual(result_list[0].document.id, "doc1")
+
+    def test_search_without_order_by_omits_sort_order(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME"))
+        self.assertNotIn("SortOrder", self.captured_bodies[-1])
+
+    def test_order_by_single_field_in_body(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME", order_by=[("BELEGDATUM", "desc")]))
+        self.assertEqual(
+            self.captured_bodies[-1].get("SortOrder"),
+            [{"Field": "BELEGDATUM", "Direction": "Desc"}],
+        )
+
+    def test_order_by_multiple_fields_preserve_order(self):
+        dlg = self._dlg()
+        list(dlg.search(
+            "COMPANY=ACME",
+            order_by=[("BELEGDATUM", "desc"), ("COMPANY", "asc")],
+        ))
+        self.assertEqual(
+            self.captured_bodies[-1].get("SortOrder"),
+            [
+                {"Field": "BELEGDATUM", "Direction": "Desc"},
+                {"Field": "COMPANY", "Direction": "Asc"},
+            ],
+        )
+
+    def test_order_by_display_name_resolves_to_db_name(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME", order_by=[("Belegdatum", "desc")]))
+        self.assertEqual(
+            self.captured_bodies[-1].get("SortOrder"),
+            [{"Field": "BELEGDATUM", "Direction": "Desc"}],
+        )
+
+    def test_order_by_direction_case_insensitive(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME", order_by=[("BELEGDATUM", "DESC")]))
+        self.assertEqual(
+            self.captured_bodies[-1].get("SortOrder"),
+            [{"Field": "BELEGDATUM", "Direction": "Desc"}],
+        )
+
+    def test_order_by_default_direction(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME", order_by=[("BELEGDATUM", "default")]))
+        self.assertEqual(
+            self.captured_bodies[-1].get("SortOrder"),
+            [{"Field": "BELEGDATUM", "Direction": "Default"}],
+        )
+
+    def test_order_by_unknown_field_raises(self):
+        dlg = self._dlg()
+        with self.assertRaises(SearchConditionError):
+            dlg.search("COMPANY=ACME", order_by=[("NoSuchField", "asc")])
+
+    def test_order_by_invalid_direction_raises(self):
+        dlg = self._dlg()
+        with self.assertRaises(SearchConditionError):
+            dlg.search("COMPANY=ACME", order_by=[("BELEGDATUM", "sideways")])
 
 
 if __name__ == "__main__":

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import enum
 import logging
-import re
 from datetime import date
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
@@ -143,25 +142,8 @@ class SearchDialog(Dialog):
     def _on_loaded(self, config: Dict) -> None:
         query_config = config.get("Query", {})
         q_endpoints = structs.Endpoints(query_config)
-        if "dialogExpressionLink" not in q_endpoints:
-            # WTF: This endpoint is needed but not included in the response, instead there is
-            # a 'dialogExpression' endpoint that can be forged to:
-            #     /DocuWare/Platform/FileCabinets/<FC_ID>/Query/DialogExpressionLink?dialogId=<DLG_ID>
-            # Looks like a bug in DocuWare's API.
-            if "dialogExpression" in q_endpoints:
-                query_config.setdefault("Links", []).append(
-                    {
-                        "rel": "dialogExpressionLink",
-                        "href": re.sub(
-                            r"/DialogExpression\b",
-                            "/DialogExpressionLink",
-                            q_endpoints["dialogExpression"],
-                            flags=re.IGNORECASE,
-                        ),
-                    }
-                )
-            else:
-                raise errors.InternalError("Endpoint 'dialogExpression' missing")
+        if "dialogExpression" not in q_endpoints:
+            raise errors.InternalError("Endpoint 'dialogExpression' missing")
         # NB: SearchQuery depends on self.fields being populated first
         self._query = SearchQuery(query_config, self)
 
@@ -174,11 +156,14 @@ class SearchDialog(Dialog):
         self,
         conditions: types.SearchConditionsT,
         operation: Optional[Union[str, Operation]] = None,
+        order_by: Optional[types.OrderByT] = None,
         quote: QuoteMode = QuoteMode.PARTIAL,
     ) -> SearchResult:
         self._load()
         assert self._query is not None
-        return self._query.search(conditions=conditions, operation=operation, quote=quote)
+        return self._query.search(
+            conditions=conditions, operation=operation, order_by=order_by, quote=quote,
+        )
 
 
 class SearchField:
@@ -284,28 +269,49 @@ class SearchQuery:
     def conn(self) -> types.ConnectionP:
         return self.dialog.client.conn
 
+    _DIRECTION_MAP = {
+        "asc": "Asc",
+        "ascending": "Asc",
+        "desc": "Desc",
+        "descending": "Desc",
+        "default": "Default",
+    }
+
+    def _build_sort_order(
+        self, order_by: types.OrderByT
+    ) -> List[Dict[str, str]]:
+        """Resolve field names and normalise directions for SortOrder body element."""
+        result: List[Dict[str, str]] = []
+        for field_name, direction in order_by:
+            field = self.cond_parser.field_by_name(field_name)
+            key = (direction or "asc").strip().lower()
+            if key not in self._DIRECTION_MAP:
+                raise errors.SearchConditionError(
+                    f"Invalid sort direction: {direction!r} (allowed: asc, desc, default)"
+                )
+            result.append({"Field": field.id, "Direction": self._DIRECTION_MAP[key]})
+        return result
+
     def search(
         self,
         conditions: types.SearchConditionsT,
         operation: Optional[Union[str, Operation]] = None,
-        sort_field: Optional[str] = None,
-        sort_order: Optional[str] = None,
+        order_by: Optional[types.OrderByT] = None,
         quote: QuoteMode = QuoteMode.PARTIAL,
     ) -> SearchResult:
         terms = self.cond_parser.parse(conditions, quote=quote)
-        query = {"fields": ",".join([t[0] for t in terms])}
-        if sort_field:
-            query["sortOrder"] = (
-                f"{self.cond_parser.field_by_name(sort_field).id} {sort_order if sort_order else 'Asc'}"
-            )
-        path = self.conn.make_path(self.endpoints["dialogExpressionLink"], query=query)
         op = operation.value if isinstance(operation, Operation) else (operation or Operation.AND.value)
-        data = {
+        data: Dict[str, Any] = {
             "Condition": [{"DBName": k, "Value": v} for k, v in terms],
             "Operation": op,
         }
-        result_url = self.conn.post_text(path, json=data).split("\n", 1)[0]
-        result = self.conn.get_json(result_url)
+        if order_by:
+            # Multi-field sort is only honoured when passed in the JSON body —
+            # the sortOrder query parameter silently truncates to one field.
+            data["SortOrder"] = self._build_sort_order(order_by)
+        query = {"fields": ",".join([t[0] for t in terms])}
+        path = self.conn.make_path(self.endpoints["dialogExpression"], query=query)
+        result = self.conn.post_json(path, json=data)
         return SearchResult(result, self)
 
     def __str__(self) -> str:

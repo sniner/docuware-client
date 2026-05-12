@@ -182,6 +182,25 @@ with `operation=docuware.Operation.OR`:
 dlg.search(["CUSTOMERNO=1234", "CUSTOMERNO=5678"], operation=docuware.Operation.OR)
 ```
 
+Results can be **sorted server-side** with `order_by`. Pass a list of
+`(field, direction)` tuples; direction is `"asc"`, `"desc"`, or `"default"`
+(case-insensitive). Field names can be the DB-name or the display label:
+
+```python
+# "Newest invoices first":
+dlg.search({"DOCTYPE": "Invoice"}, order_by=[("DOCDATE", "desc")])
+
+# Multi-field sort — primary by date desc, ties broken by customer asc:
+dlg.search(
+    {"DOCTYPE": "Invoice"},
+    order_by=[("DOCDATE", "desc"), ("CUSTOMERNO", "asc")],
+)
+```
+
+Without `order_by`, DocuWare returns the result in an unspecified order. Sorting
+server-side avoids loading every hit and sorting client-side, which matters for
+large result sets and integrations such as MCP.
+
 The result of a search is always an iterator over the search results, even if
 no result was obtained. Each individual search result holds a `document`
 attribute, which gives access to the document in the archive. The document
