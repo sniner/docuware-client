@@ -23,9 +23,14 @@ DocuWare GmbH.**
 
 ## Usage
 
-The recommended way to connect is via `docuware.connect()`, which resolves
-credentials from arguments, environment variables, or a `.credentials` file
-and handles login automatically:
+The recommended way to connect is via `docuware.connect()`. It supports all
+four OAuth2 flows (password grant, client credentials, PKCE, bring-your-own
+token) through a single entry point — see [`docs/oauth2-setup.md`](docs/oauth2-setup.md)
+for App Registration setup and detailed flow comparison.
+
+### Password grant (legacy)
+
+For existing setups with a real DocuWare user account:
 
 ```python
 import docuware
@@ -36,12 +41,48 @@ dw = docuware.connect(url="http://localhost", username="...", password="...", or
 # Or from environment variables DW_URL, DW_USERNAME, DW_PASSWORD, DW_ORG:
 dw = docuware.connect()
 
-# Or from a .credentials file:
+# Or from a credentials file (legacy shortcut):
 dw = docuware.connect(credentials_file="/path/to/.credentials")
 ```
 
 Credentials are saved automatically to the file specified by `credentials_file`
 after a successfull login.
+
+### PKCE (native/desktop, recommended for interactive use)
+
+First call opens the browser; subsequent calls reuse persisted tokens:
+
+```python
+dw = docuware.connect(
+    url="acme.docuware.cloud",
+    authenticator=docuware.PkceAuthenticator(client_id="<UUID>"),
+    credential_store=docuware.JsonFileCredentialStore("~/.config/docuware-client/.credentials"),
+)
+```
+
+Token rotation (RFC 6749 §10.4) is handled automatically — rotated tokens
+are written back to the store on every refresh.
+
+### Client Credentials (service-to-service, no user)
+
+For backend jobs, ETL, MCP servers, scheduled tasks:
+
+```python
+dw = docuware.connect(
+    url="acme.docuware.cloud",
+    authenticator=docuware.ClientCredentialsAuthenticator(
+        client_id="<UUID>",
+        client_secret="<from App Registration>",
+    ),
+    credential_store=docuware.JsonFileCredentialStore("/etc/myapp/.credentials"),
+)
+```
+
+See [`docs/oauth2-setup.md`](docs/oauth2-setup.md) for the DocuWare App
+Registration details for each flow, and `examples/oauth2_*.py` for
+complete runnable scripts.
+
+### Direct client construction
 
 For more control, use `DocuwareClient` and `login()` explicitly:
 

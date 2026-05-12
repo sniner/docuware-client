@@ -5,6 +5,83 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-12
+
+### Added
+
+- **`CredentialStore`** ABC and **`JsonFileCredentialStore`** reference
+  implementation: one unified adapter for persisting any of the four
+  OAuth2 auth flows. ``JsonFileCredentialStore`` is the library default
+  (atomic writes, mode 0o600, parent-dir creation) — most callers no
+  longer need a custom adapter
+- **`PasswordGrantAuthenticator`**: renamed-and-clarified
+  ``OAuth2Authenticator``. Now identifies its grant type explicitly
+- **`ClientCredentialsAuthenticator`**: new fourth auth flow (RFC 6749
+  §4.4) for service-to-service authentication — backend jobs, ETL
+  pipelines, scheduled tasks, MCP servers. No browser, no user, no
+  refresh tokens; the library re-acquires the access token from the
+  stored ``(client_id, client_secret)`` on 401/403
+- **`PkceAuthenticator`**: new authenticator that bundles the full PKCE
+  Authorization Code flow — local callback server, browser launch, state
+  validation, code exchange, refresh-token rotation. Supports public
+  clients (native apps) and confidential clients (web apps with
+  ``client_secret``). User-supplied ``on_browser_open`` hook makes it
+  usable in headless / CI environments. Reduces the previous
+  example-boilerplate from ~130 lines to ~5 in caller code
+- **`connect(authenticator=..., credential_store=...)`**: unified entry
+  point for all four auth flows. ``connect_with_tokens()`` becomes a
+  thin wrapper. Token-rotating authenticators are auto-wired so rotated
+  tokens persist on every refresh without explicit callback plumbing
+- **`Authenticator.to_bundle()` / `from_bundle()`**: every authenticator
+  serializes to / reconstructs from a credential bundle keyed by
+  ``method``. Lets ``connect(credential_store=store)`` reconstruct the
+  right flow automatically on the next process start
+- **`docs/oauth2-setup.md`**: complete DocuWare App Registration guide
+  for all three app types (Native, Web Application, Service /
+  Trusted Application) — including troubleshooting
+
+### Changed
+
+- **`.credentials` file schema** now carries an optional ``method`` field
+  discriminator (``"password"``, ``"client_credentials"``, ``"pkce"``,
+  ``"token"``). Files without ``method`` are treated as ``"password"``,
+  so ``docuware-mcp`` and existing setups keep working unchanged
+- **`examples/oauth2_login.py`** and **`examples/oauth2_webapp.py`**:
+  drastically shrunk (~297 → ~48 lines) by moving the boilerplate
+  into ``PkceAuthenticator``
+- **`TokenAuthenticator.on_token_refresh`** now receives the full
+  credential bundle (via ``to_bundle()``) instead of the raw token
+  response dict. Consumers that only persist ``access_token`` /
+  ``refresh_token`` keep working; consumers that read other token-response
+  fields (e.g. ``expires_in``) need to source those elsewhere
+
+### Deprecated
+
+- **`OAuth2Authenticator`** — alias for ``PasswordGrantAuthenticator``;
+  emits ``DeprecationWarning`` on instantiation. The old name was
+  misleading because all four authenticators are OAuth2
+- **`TokenStore`** — alias for ``CredentialStore``; emits
+  ``DeprecationWarning`` when subclassed. Existing subclasses keep
+  working
+
+### Migration
+
+```python
+# 0.7.x — manual PKCE boilerplate, ~130 lines copied from examples
+client = connect_with_tokens(url, access_token, refresh_token,
+                             token_endpoint, client_id, token_store=...)
+
+# 0.8.0 — five-line equivalent
+client = connect(
+    url="acme.docuware.cloud",
+    authenticator=PkceAuthenticator(client_id="..."),
+    credential_store=JsonFileCredentialStore(),
+)
+```
+
+Existing ``connect(credentials_file=...)`` and ``connect_with_tokens(...)``
+keep working without changes — the new APIs are additive.
+
 ## [0.7.14] - 2026-05-12
 
 ### Added

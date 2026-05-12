@@ -1,5 +1,12 @@
 from docuware.client import DocuwareClient, connect, connect_with_tokens
-from docuware.auth import TokenAuthenticator
+from docuware.auth import (
+    Authenticator,
+    ClientCredentialsAuthenticator,
+    OAuth2Authenticator,
+    PasswordGrantAuthenticator,
+    PkceAuthenticator,
+    TokenAuthenticator,
+)
 from docuware.dialogs import InfoDialog, Operation, QuoteMode, ResultTree, SearchDialog
 from docuware.errors import (
     AccountError,
@@ -23,7 +30,7 @@ from docuware.oauth import (
     normalize_docuware_url,
 )
 from docuware.organization import Organization
-from docuware.persistence import TokenStore
+from docuware.persistence import CredentialStore, JsonFileCredentialStore, TokenStore
 from docuware.textshot import TableZone, TextLine, TextPage, TextShot, TextZone, Word
 from docuware.users import (
     Group,
@@ -43,8 +50,11 @@ Client = DocuwareClient
 __all__ = [
     "AccountError",
     "ApiError",
+    "Authenticator",
     "Basket",
     "Client",
+    "ClientCredentialsAuthenticator",
+    "CredentialStore",
     "DataError",
     "DocuwareClientException",
     "DocuwareClient",
@@ -52,8 +62,12 @@ __all__ = [
     "Group",
     "InfoDialog",
     "InternalError",
+    "JsonFileCredentialStore",
+    "OAuth2Authenticator",
     "Operation",
     "Organization",
+    "PasswordGrantAuthenticator",
+    "PkceAuthenticator",
     "QuoteMode",
     "ResultTree",
     "ResourceError",

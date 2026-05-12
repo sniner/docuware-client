@@ -4,7 +4,7 @@ import sys
 from datetime import date, datetime
 
 import docuware
-from docuware import connect, default_credentials_file
+from docuware import JsonFileCredentialStore, connect
 from docuware.types import SearchDialogP
 
 # Setup logging to see what's happening
@@ -58,7 +58,7 @@ def main():
     # 2. Environment variables (DW_URL, DW_USERNAME, DW_PASSWORD, DW_ORG)
     # 3. .credentials file ($XDG_CONFIG_HOME/docuware-client/.credentials or $HOME/.docuware-client.cred)
     try:
-        client = connect(verify_certificate=False, credentials_file=default_credentials_file())
+        client = connect(verify_certificate=False, credential_store=JsonFileCredentialStore())
     except docuware.DocuwareClientException as e:
         print(f"Connection failed: {e}")
         sys.exit(1)

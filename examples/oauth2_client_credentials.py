@@ -1,21 +1,18 @@
-"""OAuth2 Authorization Code + PKCE login for a confidential client (web app).
+"""OAuth2 Client Credentials login — service-to-service, no browser, no user.
 
-Identical to oauth2_login.py except that this flow uses a `client_secret`
-(set on a DocuWare *Web Application* App Registration). The library
-:class:`PkceAuthenticator` already supports both public and confidential
-clients — just supply the secret.
+Use this when a backend job, ETL pipeline, scheduled task, or MCP server
+needs to talk to DocuWare under its own service identity (no human user
+involved). The DocuWare App Registration must be of type "Trusted /
+Service Application" and provide a client_secret.
 
-For App-Registration setup (DocuWare side), see `docs/oauth2-setup.md`.
+For App-Registration setup (DocuWare side), see `docs/oauth2-setup.md`
+(section "Service Application").
 
-You can also set environment variables instead of editing the constants below:
-
+Usage:
     export DW_URL=https://acme.docuware.cloud
     export DW_CLIENT_ID=your-client-id
     export DW_CLIENT_SECRET=your-client-secret
-    python oauth2_webapp.py
-
-Usage:
-    python oauth2_webapp.py
+    python oauth2_client_credentials.py
 """
 
 from __future__ import annotations
@@ -28,7 +25,6 @@ import docuware
 CLIENT_ID = os.environ.get("DW_CLIENT_ID", "<your-client-id>")
 CLIENT_SECRET = os.environ.get("DW_CLIENT_SECRET", "<your-client-secret>")
 DOCUWARE_URL = os.environ.get("DW_URL", "<your-DocuWare-URL>")
-REDIRECT_PORT = 18080  # must match the Redirect URI in the App Registration
 
 STORE_PATH = pathlib.Path.home() / ".config" / "docuware-client" / ".credentials"
 
@@ -36,10 +32,9 @@ STORE_PATH = pathlib.Path.home() / ".config" / "docuware-client" / ".credentials
 def main() -> None:
     with docuware.connect(
         url=DOCUWARE_URL,
-        authenticator=docuware.PkceAuthenticator(
+        authenticator=docuware.ClientCredentialsAuthenticator(
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
-            redirect_port=REDIRECT_PORT,
         ),
         credential_store=docuware.JsonFileCredentialStore(STORE_PATH),
     ) as client:

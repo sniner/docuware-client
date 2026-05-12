@@ -6,7 +6,7 @@ import pytest
 import httpx
 
 from docuware import errors
-from docuware.auth import BearerAuth, OAuth2Authenticator, TokenAuthenticator
+from docuware.auth import BearerAuth, PasswordGrantAuthenticator, TokenAuthenticator
 from docuware.conn import Connection
 
 BASE = "https://dw.example.com"
@@ -77,14 +77,14 @@ def test_bearer_auth_sets_authorization_header():
 
 def test_authenticator_get_raises_resource_error_on_non_200():
     conn = _conn(lambda req: httpx.Response(500, json={"Message": "server error"}))
-    auth = OAuth2Authenticator("u", "p")
+    auth = PasswordGrantAuthenticator("u", "p")
     with pytest.raises(errors.ResourceError):
         auth._get(conn, "/some/path")
 
 
 def test_authenticator_post_raises_resource_error_on_non_200():
     conn = _conn(lambda req: httpx.Response(401))
-    auth = OAuth2Authenticator("u", "p")
+    auth = PasswordGrantAuthenticator("u", "p")
     with pytest.raises(errors.ResourceError):
         auth._post(conn, "/some/path")
 
@@ -94,24 +94,24 @@ def test_authenticator_post_raises_resource_error_on_non_200():
 
 def test_get_access_token_400_raises_account_error():
     conn = _conn(_auth_handler(token_status=400, token_body={"error": "invalid_grant"}))
-    auth = OAuth2Authenticator("alice", "wrongpass")
+    auth = PasswordGrantAuthenticator("alice", "wrongpass")
     with pytest.raises(errors.AccountError, match="invalid username or password"):
         auth._get_access_token(conn)
 
 
 def test_get_access_token_no_token_field_raises_account_error():
     conn = _conn(_auth_handler(token_status=200, token_body={"token_type": "Bearer"}))
-    auth = OAuth2Authenticator("alice", "pass")
+    auth = PasswordGrantAuthenticator("alice", "pass")
     with pytest.raises(errors.AccountError, match="No access token"):
         auth._get_access_token(conn)
 
 
-# --- OAuth2Authenticator.login / logoff ---
+# --- PasswordGrantAuthenticator.login / logoff ---
 
 
 def test_oauth2_login_sets_session_auth():
     conn = _conn(_auth_handler())
-    auth = OAuth2Authenticator("user", "pass")
+    auth = PasswordGrantAuthenticator("user", "pass")
     auth.login(conn)
     assert auth.token == "tok"
     assert conn.session.auth is not None
@@ -120,7 +120,7 @@ def test_oauth2_login_sets_session_auth():
 def test_oauth2_logoff_clears_token():
     conn = Connection(BASE)
     conn.session = httpx.Client()
-    auth = OAuth2Authenticator("user", "pass")
+    auth = PasswordGrantAuthenticator("user", "pass")
     auth.token = "existing_token"
     auth._apply_access_token(conn, auth.token)
     assert conn.session.auth is not None
@@ -132,7 +132,7 @@ def test_oauth2_logoff_clears_token():
 def test_oauth2_logoff_noop_when_no_token():
     conn = Connection(BASE)
     conn.session = httpx.Client()
-    auth = OAuth2Authenticator("user", "pass")
+    auth = PasswordGrantAuthenticator("user", "pass")
     auth.token = None
     auth.logoff(conn)  # must not raise
     assert auth.token is None
@@ -187,7 +187,7 @@ def test_request_retries_on_401():
         return httpx.Response(404)
 
     conn = _conn(handler)
-    conn.authenticator = OAuth2Authenticator("user", "pass")
+    conn.authenticator = PasswordGrantAuthenticator("user", "pass")
     resp = conn.get("/DocuWare/Platform/protected")
     assert resp.status_code == 200
     assert protected_calls["n"] == 2

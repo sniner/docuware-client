@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from docuware import DocuwareClient, TokenStore, errors
+from docuware import CredentialStore, DocuwareClient, errors
 from docuware.client import connect, connect_with_tokens
 from docuware.auth import TokenAuthenticator
 
@@ -124,13 +124,91 @@ def test_connect_does_not_overwrite_unchanged_credentials(tmp_path, monkeypatch)
     monkeypatch.delenv("DW_URL", raising=False)
     monkeypatch.delenv("DW_USERNAME", raising=False)
     monkeypatch.delenv("DW_PASSWORD", raising=False)
-    creds = {"url": BASE_URL, "username": "u", "password": "p"}
+    # Pre-write the bundle in the 0.8 shape (with method) so connect() reads
+    # exactly what it would write — no rewrite expected.
+    creds = {"method": "password", "url": BASE_URL, "username": "u", "password": "p"}
     creds_file = tmp_path / "creds.json"
-    creds_file.write_text(json.dumps(creds))
+    creds_file.write_text(json.dumps(creds, indent=4))
     mtime_before = creds_file.stat().st_mtime
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_auth_handler())):
         connect(credentials_file=creds_file)
     assert creds_file.stat().st_mtime == mtime_before
+
+
+# --- connect() with authenticator / credential_store DI ---
+
+
+def test_connect_with_explicit_authenticator(tmp_path, monkeypatch):
+    """Path 1: authenticator= wins; bundle gets saved to credential_store."""
+    monkeypatch.delenv("DW_URL", raising=False)
+    creds_file = tmp_path / "creds.json"
+    from docuware.auth import ClientCredentialsAuthenticator
+    from docuware.persistence import JsonFileCredentialStore
+
+    cc_handler = _token_handler_for_client_credentials()
+    with patch("docuware.client.DocuwareClient.__init__", _patched_init(cc_handler)):
+        connect(
+            url=BASE_URL,
+            authenticator=ClientCredentialsAuthenticator(
+                client_id="cid", client_secret="sec",
+            ),
+            credential_store=JsonFileCredentialStore(creds_file),
+        )
+    saved = json.loads(creds_file.read_text())
+    assert saved["method"] == "client_credentials"
+    assert saved["url"] == BASE_URL
+    assert saved["client_id"] == "cid"
+    assert saved["client_secret"] == "sec"
+
+
+def test_connect_rebuilds_authenticator_from_store(tmp_path, monkeypatch):
+    """Path 2: populated store with method='client_credentials' rebuilds the auth."""
+    monkeypatch.delenv("DW_URL", raising=False)
+    creds_file = tmp_path / "creds.json"
+    creds_file.write_text(json.dumps({
+        "method": "client_credentials",
+        "url": BASE_URL,
+        "client_id": "stored_cid",
+        "client_secret": "stored_sec",
+        "scope": "docuware.platform",
+    }))
+    from docuware.auth import ClientCredentialsAuthenticator
+    from docuware.persistence import JsonFileCredentialStore
+
+    cc_handler = _token_handler_for_client_credentials()
+    with patch("docuware.client.DocuwareClient.__init__", _patched_init(cc_handler)):
+        client = connect(credential_store=JsonFileCredentialStore(creds_file))
+    assert isinstance(client.conn.authenticator, ClientCredentialsAuthenticator)
+    assert client.conn.authenticator.client_id == "stored_cid"
+
+
+def test_connect_credentials_file_and_credential_store_mutually_exclusive(tmp_path):
+    from docuware.persistence import JsonFileCredentialStore
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        connect(
+            credentials_file=tmp_path / "a.json",
+            credential_store=JsonFileCredentialStore(tmp_path / "b.json"),
+        )
+
+
+def _token_handler_for_client_credentials():
+    """Mock the discovery + token endpoints for the client_credentials grant."""
+    def handler(req):
+        path = req.url.path
+        if "/IdentityServiceInfo" in path:
+            return httpx.Response(
+                200, json={"IdentityServiceUrl": f"{BASE_URL}/DocuWare/Identity"}
+            )
+        if "openid-configuration" in path:
+            return httpx.Response(
+                200, json={"token_endpoint": "/DocuWare/Identity/connect/token"}
+            )
+        if "/connect/token" in path:
+            return httpx.Response(200, json={"access_token": "cc_at"})
+        if path == "/DocuWare/Platform":
+            return httpx.Response(200, json={"Version": "7.11", "Links": [], "Resources": []})
+        return httpx.Response(404)
+    return handler
 
 
 # --- connect_with_tokens() ---
@@ -188,11 +266,11 @@ def test_connect_with_tokens_passes_callback():
     assert client.conn.authenticator.on_token_refresh is callback
 
 
-# --- connect_with_tokens() with TokenStore ---
+# --- connect_with_tokens() with CredentialStore ---
 
 
-class _MemoryTokenStore(TokenStore):
-    """In-memory TokenStore for tests; records every save() call."""
+class _MemoryCredentialStore(CredentialStore):
+    """In-memory CredentialStore for tests; records every save() call."""
 
     def __init__(self, initial=None):
         self._bundle = initial
@@ -207,7 +285,7 @@ class _MemoryTokenStore(TokenStore):
 
 
 def test_connect_with_tokens_uses_store_tokens():
-    store = _MemoryTokenStore({"access_token": "from_store", "refresh_token": "rt_store"})
+    store = _MemoryCredentialStore({"access_token": "from_store", "refresh_token": "rt_store"})
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
         client = connect_with_tokens(
             url=BASE_URL,
@@ -217,14 +295,22 @@ def test_connect_with_tokens_uses_store_tokens():
         )
     assert client.conn.session.auth.token == "from_store"
     assert client.conn.authenticator.refresh_token == "rt_store"
-    # Bound-method identity is unstable in Python; compare by underlying function + instance.
-    cb = client.conn.authenticator.on_token_refresh
-    assert cb.__self__ is store and cb.__func__ is _MemoryTokenStore.save
-    assert store.saves == []  # store already populated, no bootstrap save
+    # on_token_refresh is auto-wired to a closure that calls store.save with
+    # the full bundle (including the url field added by connect()).
+    assert callable(client.conn.authenticator.on_token_refresh)
+    # The minimal stored bundle gets enriched on first use — connect() writes
+    # the full {method, client_id, access_token, refresh_token, token_endpoint, url}.
+    assert len(store.saves) == 1
+    enriched = store.saves[0]
+    assert enriched["method"] == "token"
+    assert enriched["url"] == BASE_URL
+    assert enriched["access_token"] == "from_store"
+    assert enriched["refresh_token"] == "rt_store"
+    assert enriched["client_id"] == "test-client"
 
 
 def test_connect_with_tokens_bootstrap_seeds_empty_store():
-    store = _MemoryTokenStore()  # empty
+    store = _MemoryCredentialStore()  # empty
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
         connect_with_tokens(
             url=BASE_URL,
@@ -235,11 +321,20 @@ def test_connect_with_tokens_bootstrap_seeds_empty_store():
             token_store=store,
         )
     assert len(store.saves) == 1
-    assert store.saves[0] == {"access_token": "at_seed", "refresh_token": "rt_seed"}
+    # Bootstrap writes the full bundle, not just access/refresh — so the next
+    # process start can reconstruct the TokenAuthenticator from the store alone.
+    assert store.saves[0] == {
+        "method": "token",
+        "url": BASE_URL,
+        "client_id": "test-client",
+        "access_token": "at_seed",
+        "refresh_token": "rt_seed",
+        "token_endpoint": "https://login.example.com/token",
+    }
 
 
 def test_connect_with_tokens_empty_store_without_seed_raises():
-    store = _MemoryTokenStore()  # empty
+    store = _MemoryCredentialStore()  # empty
     with pytest.raises(errors.AccountError, match="token_store is empty"):
         connect_with_tokens(
             url=BASE_URL,
@@ -250,7 +345,7 @@ def test_connect_with_tokens_empty_store_without_seed_raises():
 
 
 def test_connect_with_tokens_store_and_callback_mutually_exclusive():
-    store = _MemoryTokenStore({"access_token": "a", "refresh_token": "r"})
+    store = _MemoryCredentialStore({"access_token": "a", "refresh_token": "r"})
     with pytest.raises(ValueError, match="mutually exclusive"):
         connect_with_tokens(
             url=BASE_URL,
@@ -262,7 +357,7 @@ def test_connect_with_tokens_store_and_callback_mutually_exclusive():
 
 
 def test_connect_with_tokens_incomplete_store_bundle_raises():
-    store = _MemoryTokenStore({"access_token": "a"})  # no refresh_token
+    store = _MemoryCredentialStore({"access_token": "a"})  # no refresh_token
     with pytest.raises(errors.AccountError, match="incomplete bundle"):
         connect_with_tokens(
             url=BASE_URL,
@@ -274,7 +369,7 @@ def test_connect_with_tokens_incomplete_store_bundle_raises():
 
 def test_connect_with_tokens_refresh_triggers_store_save():
     """End-to-end: refresh → save() chain populates the store with rotated tokens."""
-    store = _MemoryTokenStore({"access_token": "old_at", "refresh_token": "old_rt"})
+    store = _MemoryCredentialStore({"access_token": "old_at", "refresh_token": "old_rt"})
 
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
         client = connect_with_tokens(
@@ -283,6 +378,8 @@ def test_connect_with_tokens_refresh_triggers_store_save():
             client_id="test-client",
             token_store=store,
         )
+    # First save: connect() enriches the minimal store bundle to the full shape.
+    assert len(store.saves) == 1
 
     # TokenAuthenticator.authenticate() makes a one-shot httpx.post that does
     # not go through the patched session — patch the call directly.
@@ -299,12 +396,15 @@ def test_connect_with_tokens_refresh_triggers_store_save():
     mock_post.assert_called_once()
     assert client.conn.authenticator.access_token == "new_at"
     assert client.conn.authenticator.refresh_token == "new_rt"
-    assert len(store.saves) == 1
-    assert store.saves[0]["access_token"] == "new_at"
-    assert store.saves[0]["refresh_token"] == "new_rt"
+    # Second save: refresh callback persisted the rotated tokens via the store.
+    assert len(store.saves) == 2
+    assert store.saves[-1]["access_token"] == "new_at"
+    assert store.saves[-1]["refresh_token"] == "new_rt"
+    assert store.saves[-1]["url"] == BASE_URL
+    assert store.saves[-1]["method"] == "token"
 
 
-def test_token_store_is_abstract():
-    """TokenStore cannot be instantiated without overriding load/save."""
+def test_credential_store_is_abstract():
+    """CredentialStore cannot be instantiated without overriding load/save."""
     with pytest.raises(TypeError):
-        TokenStore()  # type: ignore[abstract]
+        CredentialStore()  # type: ignore[abstract]

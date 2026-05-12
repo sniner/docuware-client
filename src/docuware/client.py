@@ -1,14 +1,67 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import pathlib
-from typing import Any, Callable, Dict, Iterator, Optional, Union
+from typing import Any, Callable, Dict, Iterator, Optional, Type, Union
 
-from docuware import auth, conn, errors, organization, persistence, structs, types, utils
+from docuware import auth, conn, errors, organization, persistence, structs, types
 
 log = logging.getLogger(__name__)
+
+
+_METHOD_REGISTRY: Dict[str, Type[auth.Authenticator]] = {
+    "password":           auth.PasswordGrantAuthenticator,
+    "client_credentials": auth.ClientCredentialsAuthenticator,
+    "pkce":               auth.PkceAuthenticator,
+    "token":              auth.TokenAuthenticator,
+}
+
+
+def _authenticator_from_bundle(bundle: Dict[str, Any]) -> auth.Authenticator:
+    method = bundle.get("method", "password")
+    cls = _METHOD_REGISTRY.get(method)
+    if cls is None:
+        raise errors.AccountError(f"Unknown auth method in credential bundle: {method!r}")
+    return cls.from_bundle(bundle)
+
+
+def _wire_store_callback(
+    authenticator: auth.Authenticator,
+    store: persistence.CredentialStore,
+    url: str,
+) -> None:
+    """Auto-wire on_token_refresh so token rotation persists to the store.
+
+    Only fires for authenticators that *have* such a hook (Pkce, Token).
+    User-supplied callbacks are left untouched — the user wins.
+    """
+    if not hasattr(authenticator, "on_token_refresh"):
+        return
+    if getattr(authenticator, "on_token_refresh", None) is not None:
+        return
+
+    def _callback(bundle: Dict[str, Any]) -> None:
+        try:
+            store.save({**bundle, "url": url})
+        except OSError as exc:
+            log.warning("Failed to save rotated credentials: %s", exc)
+
+    authenticator.on_token_refresh = _callback  # type: ignore[attr-defined]
+
+
+def _save_bundle(
+    store: Optional[persistence.CredentialStore],
+    bundle: Dict[str, Any],
+    existing: Optional[Dict[str, Any]],
+) -> None:
+    """Save bundle to store iff it differs from existing. OSError → warning."""
+    if store is None or existing == bundle:
+        return
+    try:
+        store.save(bundle)
+    except OSError as exc:
+        log.warning("Failed to save credentials: %s", exc)
 
 
 class DocuwareClient(types.DocuwareClientP):
@@ -48,7 +101,7 @@ class DocuwareClient(types.DocuwareClientP):
         organization: Optional[str] = None,
     ) -> DocuwareClient:
         if not self.conn.authenticator:
-            self.conn.authenticator = auth.OAuth2Authenticator(
+            self.conn.authenticator = auth.PasswordGrantAuthenticator(
                 username=username,
                 password=password,
                 organization=organization,
@@ -84,60 +137,116 @@ def connect(
     password: Optional[str] = None,
     organization: Optional[str] = None,
     *,
-    verify_certificate: bool = True,
+    authenticator: Optional[auth.Authenticator] = None,
+    credential_store: Optional[persistence.CredentialStore] = None,
     credentials_file: Optional[Union[str, pathlib.Path]] = None,
+    verify_certificate: bool = True,
     timeout: Optional[float] = None,
 ) -> DocuwareClient:
-    """
-    Connect to DocuWare server using credentials from arguments, environment, or file.
+    """Connect to DocuWare using one of four supported auth flows.
 
-    Priority:
-    1. Arguments
-    2. Environment variables (DW_URL, DW_USERNAME, DW_PASSWORD, DW_ORG)
-    3. Saves a credentials file
+    Resolution order:
+
+    1. **Explicit ``authenticator=``** — used directly. URL is resolved from
+       ``url`` arg, ``DW_URL`` env, or the ``url`` field of an existing store
+       bundle. After login the resulting bundle is saved to ``credential_store``
+       (if given). Token-rotating authenticators are auto-wired so rotated
+       tokens persist on every refresh.
+    2. **Populated ``credential_store=``** (non-password method) — the
+       authenticator is reconstructed via ``method`` discriminator, then
+       login() proceeds as above.
+    3. **Legacy password flow** — ``url``/``username``/``password``/
+       ``organization`` resolved via Arg > Env > Store. URL is required.
+       After login, the ``.credentials``-style bundle is saved if changed.
 
     Args:
-        timeout: Request timeout in seconds.  Defaults to the value of the
-                 ``DW_TIMEOUT`` environment variable, or 30 s if not set.
+        authenticator:    Optional pre-built :class:`Authenticator`. Wins over
+                          store-based reconstruction. Use this for PKCE or
+                          client_credentials first-time setup.
+        credential_store: Optional :class:`CredentialStore` adapter for
+                          loading initial state and persisting rotated tokens.
+        credentials_file: Legacy shortcut — lifted internally to a
+                          :class:`JsonFileCredentialStore` at that path.
+                          Mutually exclusive with ``credential_store``.
+        timeout:          Request timeout in seconds. Defaults to ``DW_TIMEOUT``
+                          env var, or 30 s.
     """
-    credentials_file = pathlib.Path(credentials_file) if credentials_file else None
+    if credentials_file is not None and credential_store is not None:
+        raise ValueError("credentials_file and credential_store are mutually exclusive")
+    if credentials_file is not None:
+        credential_store = persistence.JsonFileCredentialStore(credentials_file)
 
-    # Load from file if exists
-    file_creds = {}
-    if credentials_file and credentials_file.exists():
-        try:
-            with open(credentials_file, encoding="utf-8-sig") as f:
-                file_creds = json.load(f)
-        except (json.JSONDecodeError, OSError) as exc:
-            log.warning("Failed to load credentials from %s: %s", credentials_file, exc)
+    file_creds = credential_store.load() if credential_store is not None else None
 
-    # Resolve values (Arg > Env > File)
-    url = url or os.environ.get("DW_URL") or file_creds.get("url")
-    user = username or os.environ.get("DW_USERNAME") or file_creds.get("username")
-    passwd = password or os.environ.get("DW_PASSWORD") or file_creds.get("password")
-    org = organization or os.environ.get("DW_ORG") or file_creds.get("organization")
+    # --- Path 1: explicit authenticator ---
+    if authenticator is not None:
+        resolved_url = url or os.environ.get("DW_URL") or (file_creds or {}).get("url")
+        if not resolved_url:
+            raise errors.AccountError(
+                "URL is required (arg, env DW_URL, or credential_store containing 'url')"
+            )
+        if credential_store is not None:
+            _wire_store_callback(authenticator, credential_store, resolved_url)
+        client = DocuwareClient(
+            resolved_url,
+            verify_certificate=verify_certificate,
+            timeout=timeout,
+            authenticator=authenticator,
+        ).login()
+        if credential_store is not None:
+            _save_bundle(
+                credential_store,
+                {**authenticator.to_bundle(), "url": resolved_url},
+                file_creds,
+            )
+        return client
 
-    if not url:
-        raise errors.AccountError("URL is required (arg, env DW_URL, or .credentials file)")
+    # --- Path 2: rebuild non-password authenticator from store ---
+    if file_creds and file_creds.get("method") and file_creds["method"] != "password":
+        rebuilt = _authenticator_from_bundle(file_creds)
+        resolved_url = url or os.environ.get("DW_URL") or file_creds.get("url")
+        if not resolved_url:
+            raise errors.AccountError("URL is required (arg, env DW_URL, or 'url' in store)")
+        _wire_store_callback(rebuilt, credential_store, resolved_url)  # type: ignore[arg-type]
+        client = DocuwareClient(
+            resolved_url,
+            verify_certificate=verify_certificate,
+            timeout=timeout,
+            authenticator=rebuilt,
+        ).login()
+        _save_bundle(
+            credential_store,
+            {**rebuilt.to_bundle(), "url": resolved_url},
+            file_creds,
+        )
+        return client
 
-    client = DocuwareClient(url, verify_certificate=verify_certificate, timeout=timeout)
+    # --- Path 3: legacy password flow (Arg > Env > Store) ---
+    resolved_url = url or os.environ.get("DW_URL") or (file_creds or {}).get("url")
+    user = username or os.environ.get("DW_USERNAME") or (file_creds or {}).get("username")
+    passwd = password or os.environ.get("DW_PASSWORD") or (file_creds or {}).get("password")
+    org = organization or os.environ.get("DW_ORG") or (file_creds or {}).get("organization")
+
+    if not resolved_url:
+        raise errors.AccountError(
+            "URL is required (arg, env DW_URL, or .credentials file)"
+        )
+
+    client = DocuwareClient(
+        resolved_url, verify_certificate=verify_certificate, timeout=timeout,
+    )
     client.login(username=user, password=passwd, organization=org)
 
-    # Save credentials if requested
-    if credentials_file and user and passwd:
-        new_creds = {
-            "url": url,
+    if credential_store is not None and user and passwd:
+        new_bundle: Dict[str, Any] = {
+            "method": "password",
+            "url": resolved_url,
             "username": user,
             "password": passwd,
         }
         if org:
-            new_creds["organization"] = org
-
-        if file_creds != new_creds:
-            try:
-                utils.atomic_json_write(credentials_file, new_creds, indent=4)
-            except OSError as exc:
-                log.warning("Failed to save credentials to %s: %s", credentials_file, exc)
+            new_bundle["organization"] = org
+        _save_bundle(credential_store, new_bundle, file_creds)
 
     return client
 
@@ -150,58 +259,39 @@ def connect_with_tokens(
     client_id: str = "",
     *,
     client_secret: str = "",
-    token_store: Optional[persistence.TokenStore] = None,
+    token_store: Optional[persistence.CredentialStore] = None,
     on_token_refresh: Optional[Callable[[Dict[str, Any]], None]] = None,
     verify_certificate: bool = True,
     timeout: Optional[float] = None,
 ) -> DocuwareClient:
     """Connect to DocuWare using an existing OAuth2 access+refresh token pair.
 
-    Intended for applications that handle the OAuth2 login flow themselves
-    (e.g. PKCE) and obtain tokens externally.  The client will automatically
-    refresh the access token on 401/403 using the refresh token.
+    .. deprecated:: 0.8.0
+       Prefer ``connect(authenticator=TokenAuthenticator(...), credential_store=...)``
+       which works the same way and is consistent with the other auth flows.
 
-    Note: this function does *not* call :func:`~docuware.oauth.discover_oauth_endpoints`
-    — the caller must resolve the token_endpoint beforehand.
+    Intended for applications that handle the OAuth2 login flow themselves
+    (e.g. PKCE in a non-localhost setting) and obtain tokens externally. The
+    client refreshes automatically on 401/403 using the refresh token.
 
     DocuWare rotates refresh tokens (RFC 6749 §10.4) and revokes the entire
     token family on reuse. Production callers should pass a ``token_store``
-    so the rotated tokens are persisted across process restarts; otherwise
-    the next start will fail with ``invalid_grant`` and force a fresh PKCE
-    login.
+    so rotated tokens are persisted across restarts.
 
     Args:
-        url:              DocuWare Platform base URL.
-        access_token:     OAuth2 access token. Optional when ``token_store``
-                          already contains tokens; required otherwise.
-        refresh_token:    OAuth2 refresh token. Optional when ``token_store``
-                          already contains tokens; required otherwise.
-        token_endpoint:   Token endpoint URL (from OpenID Connect discovery).
-        client_id:        OAuth2 client ID.
-        client_secret:    OAuth2 client secret — required for confidential clients
-                          (web apps), empty for public/native clients (default).
-        token_store:      Optional :class:`~docuware.TokenStore` adapter.  If
-                          set, ``load()`` is consulted for the initial tokens
-                          (falling back to the explicit ``access_token`` /
-                          ``refresh_token`` arguments as a bootstrap seed),
-                          and ``save()`` is wired in as the rotation callback.
-                          Mutually exclusive with ``on_token_refresh``.
-        on_token_refresh: Optional callback(tokens: dict) called after each
-                          successful token refresh — use it to persist new tokens.
-                          Mutually exclusive with ``token_store``.
-        verify_certificate: Whether to verify TLS certificates (default True).
-        timeout:          Request timeout in seconds.  Defaults to the value of
-                          the ``DW_TIMEOUT`` environment variable, or 30 s if not set.
-
-    Returns:
-        Connected DocuwareClient instance.
+        token_store:      Optional :class:`CredentialStore`. If populated,
+                          its tokens override the explicit args; if empty,
+                          the explicit args bootstrap it. Mutually exclusive
+                          with ``on_token_refresh``.
+        on_token_refresh: Mutually exclusive with ``token_store``.
     """
+    if token_store is not None and on_token_refresh is not None:
+        raise ValueError(
+            "token_store and on_token_refresh are mutually exclusive — "
+            "the store's save() is used as the refresh callback"
+        )
+
     if token_store is not None:
-        if on_token_refresh is not None:
-            raise ValueError(
-                "token_store and on_token_refresh are mutually exclusive — "
-                "the store's save() is used as the refresh callback"
-            )
         bundle = token_store.load()
         if bundle:
             stored_access = bundle.get("access_token", "")
@@ -219,16 +309,15 @@ def connect_with_tokens(
                 )
             access_token = stored_access
             refresh_token = stored_refresh
-        elif access_token and refresh_token:
-            # Bootstrap: seed the empty store with the supplied tokens so a
-            # crash before the first refresh does not lose them.
-            token_store.save({"access_token": access_token, "refresh_token": refresh_token})
-        else:
+            # Recover static config from the bundle when the caller omitted it.
+            token_endpoint = token_endpoint or bundle.get("token_endpoint", "")
+            client_id = client_id or bundle.get("client_id", "")
+            client_secret = client_secret or bundle.get("client_secret", "")
+        elif not (access_token and refresh_token):
             raise errors.AccountError(
                 "token_store is empty and no explicit access_token/refresh_token "
                 "given — run the PKCE login first to seed the store"
             )
-        on_token_refresh = token_store.save
 
     if not access_token or not refresh_token:
         raise errors.AccountError(
@@ -247,9 +336,10 @@ def connect_with_tokens(
         verify=verify_certificate,
         on_token_refresh=on_token_refresh,
     )
-    return DocuwareClient(
-        url,
+    return connect(
+        url=url,
+        authenticator=authenticator,
+        credential_store=token_store,
         verify_certificate=verify_certificate,
         timeout=timeout,
-        authenticator=authenticator,
-    ).login()
+    )

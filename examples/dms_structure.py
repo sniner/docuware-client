@@ -2,7 +2,7 @@ import logging
 import sys
 
 import docuware
-from docuware import connect, default_credentials_file
+from docuware import JsonFileCredentialStore, connect
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -11,7 +11,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 def main():
     try:
-        client = connect(verify_certificate=False, credentials_file=default_credentials_file())
+        client = connect(verify_certificate=False, credential_store=JsonFileCredentialStore())
     except docuware.DocuwareClientException as e:
         print(f"Connection failed: {e}")
         sys.exit(1)
