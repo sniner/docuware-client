@@ -5,6 +5,8 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.7.14] - 2026-05-12
+
 ### Added
 
 - **`TokenStore`** abstract base class: adapter interface for loading and
