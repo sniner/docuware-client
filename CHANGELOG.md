@@ -5,6 +5,19 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-05-12
+
+### Fixed
+
+- **`TextShot` dropped tabular content**: DocuWare emits invoice line items and other
+  detected tables as a `TableZone` (container of cells, each cell wrapping a
+  `TextZone`-shaped block). The parser previously only accepted top-level `TextZone`
+  items, so callers saw header and footer text but nothing in between — a single
+  test invoice grew from ~940 to ~2330 chars after the fix. `TableZone` is now a
+  first-class zone type, its words flow into `TextShot.text` / `.words()` in reading
+  order, and the structured `TableZone.cells` (each a `TextZone`) is exposed for
+  callers that need layout information
+
 ## [0.7.12] - 2026-05-12
 
 ### Added

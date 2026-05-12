@@ -23,7 +23,7 @@ from docuware.oauth import (
     normalize_docuware_url,
 )
 from docuware.organization import Organization
-from docuware.textshot import TextLine, TextPage, TextShot, TextZone, Word
+from docuware.textshot import TableZone, TextLine, TextPage, TextShot, TextZone, Word
 from docuware.users import (
     Group,
     User,
@@ -58,6 +58,7 @@ __all__ = [
     "ResourceNotFoundError",
     "SearchConditionError",
     "SearchDialog",
+    "TableZone",
     "TextLine",
     "TextPage",
     "TextShot",

@@ -4,9 +4,10 @@ from unittest.mock import MagicMock
 import httpx
 
 from docuware import DocuwareClient, TextShot
+from docuware.cidict import CaseInsensitiveDict
 from docuware.document import Document
 from docuware.filecabinet import FileCabinet
-from docuware.textshot import TextLine, TextPage, TextZone, Word
+from docuware.textshot import TableZone, TextLine, TextPage, TextZone, Word
 from docuware.types import OrganizationP
 
 
@@ -126,6 +127,85 @@ class TestTextShotParsing(unittest.TestCase):
         self.assertEqual(w.height, 0)
         self.assertFalse(w.bold)
         self.assertIsNone(w.font_size)
+
+
+# Real-shape payload with a TableZone — DocuWare emits these for content the
+# OCR detects as tabular (e.g. invoice line items). Each cell wraps a
+# TextZone-shaped block.
+SAMPLE_WITH_TABLE = {
+    "Pages": [
+        {
+            "$type": "PageContent",
+            "Items": [
+                {
+                    "$type": "TextZone",
+                    "Ln": [
+                        {"Items": [{"$type": "Word", "Value": "Header"}]},
+                    ],
+                },
+                {
+                    "$type": "TableZone",
+                    "Cz": [
+                        {
+                            "TextZone": {
+                                "Ln": [
+                                    {"Items": [{"$type": "Word", "Value": "Pos"}]},
+                                    {"Items": [{"$type": "Word", "Value": "1"}]},
+                                ]
+                            }
+                        },
+                        {
+                            "TextZone": {
+                                "Ln": [
+                                    {"Items": [{"$type": "Word", "Value": "Steel"}]},
+                                ]
+                            }
+                        },
+                    ],
+                },
+                {"$type": "Rulerline"},
+            ],
+        }
+    ]
+}
+
+
+class TestTableZoneParsing(unittest.TestCase):
+    def test_table_zone_recognized_as_zone(self):
+        ts = TextShot(SAMPLE_WITH_TABLE)
+        zones = ts.pages[0].zones
+        self.assertEqual([type(z).__name__ for z in zones], ["TextZone", "TableZone"])
+
+    def test_table_zone_cells_parsed(self):
+        ts = TextShot(SAMPLE_WITH_TABLE)
+        table = ts.pages[0].zones[1]
+        self.assertIsInstance(table, TableZone)
+        self.assertEqual(len(table.cells), 2)
+        self.assertEqual(len(table.cells[0].lines), 2)
+
+    def test_table_zone_words_included_in_text(self):
+        ts = TextShot(SAMPLE_WITH_TABLE)
+        words = [w.value for w in ts.words()]
+        self.assertEqual(words, ["Header", "Pos", "1", "Steel"])
+        self.assertIn("Pos", ts.text)
+        self.assertIn("Steel", ts.text)
+
+    def test_table_zone_works_with_case_insensitive_dict(self):
+        """Regression: DocuWare's CaseInsensitiveDict is not a `dict`, so any
+        isinstance(x, dict) check would silently drop every cell when called
+        through a real connection."""
+        wrapped = CaseInsensitiveDict({
+            "Cz": [
+                CaseInsensitiveDict({
+                    "TextZone": CaseInsensitiveDict({
+                        "Ln": [{"Items": [{"$type": "Word", "Value": "Cell-X"}]}]
+                    })
+                })
+            ]
+        })
+        tz = TableZone(wrapped)
+        self.assertEqual(len(tz.cells), 1)
+        self.assertEqual([w.value for w in tz.words()], ["Cell-X"])
 
 
 class TestAttachmentTextshot(unittest.TestCase):

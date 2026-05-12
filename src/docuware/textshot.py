@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterator, List, Optional
+from collections.abc import Mapping
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +62,36 @@ class TextZone:
             yield from line.words
 
 
+class TableZone:
+    """A zone laid out as a table. DocuWare emits these for content that the
+    OCR detected as tabular (e.g. invoice line items). Each cell wraps a
+    `TextZone`-shaped block of lines — we flatten them in reading order for
+    the plain-text view.
+    """
+
+    def __init__(self, config: TextShotConfigT):
+        self.cells: List[TextZone] = []
+        for cell in _as_list(config.get("Cz")):
+            # Note: DocuWare's CaseInsensitiveDict is a MutableMapping, not a dict,
+            # so isinstance(cell, dict) would filter every real-connection cell out.
+            if not isinstance(cell, Mapping):
+                continue
+            inner = cell.get("TextZone")
+            if isinstance(inner, Mapping):
+                self.cells.append(TextZone(inner))
+
+    @property
+    def text(self) -> str:
+        return "\n".join(c.text for c in self.cells if c.text)
+
+    def words(self) -> Iterator[Word]:
+        for cell in self.cells:
+            yield from cell.words()
+
+
 class TextPage:
+    _ZONE_TYPES = {"TextZone": TextZone, "TableZone": TableZone}
+
     def __init__(self, config: TextShotConfigT):
         self.language: Optional[str] = config.get("Lang")
         self.width: int = int(config.get("SizeX") or 0)
@@ -70,11 +100,11 @@ class TextPage:
         self.dpi_y: float = float(config.get("VerticalDpi") or 0)
         self.skew_angle: float = float(config.get("SkewAngle") or 0.0)
         self.rotation: Optional[str] = config.get("Rotation")
-        self.zones: List[TextZone] = [
-            TextZone(item)
-            for item in _as_list(config.get("Items"))
-            if item.get("$type") == "TextZone"
-        ]
+        self.zones: List[Union[TextZone, TableZone]] = []
+        for item in _as_list(config.get("Items")):
+            zone_cls = self._ZONE_TYPES.get(item.get("$type"))
+            if zone_cls is not None:
+                self.zones.append(zone_cls(item))
 
     @property
     def text(self) -> str:
