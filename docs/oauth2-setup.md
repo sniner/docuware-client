@@ -37,6 +37,15 @@ DocuWare Configuration → Integrations → App Registration → **Add**:
 Click **Save** — the registration is inactive until saved. An unsaved
 registration produces `invalid_request: Invalid redirect_uri` errors.
 
+**Why a fixed port?** RFC 8252 §7.3 requires authorization servers to
+accept *any* port on loopback redirect URIs, so a native app can pick a
+free one at runtime. DocuWare's IdentityServer does not honor this:
+the registered redirect URI is matched byte-exact, port included. You
+have to reserve one port up front and pass it as `redirect_port=...`.
+`PkceAuthenticator`'s default `redirect_port=0` (OS-picks-free-port) is
+RFC-correct but unusable against DocuWare — the dynamically chosen
+port will never match what's registered.
+
 ### Use it from Python
 
 ```python
