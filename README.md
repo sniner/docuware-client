@@ -1,9 +1,14 @@
 # docuware-client
 
-This is a client library for the REST API of [DocuWare][1] DMS. Since
-DocuWare does not appear to publish official developer documentation for the
-REST API beyond XSD schema files, this client covers only a part of the
-API's functionality.
+This is a client library for the REST API of [DocuWare][1] DMS. It lets you
+query your DocuWare archives, download and upload documents, read and update
+index fields, retrieve OCR'd text from fulltext-indexed cabinets, and manage
+users and groups. The bundled `dw-client` command exposes the most common
+operations on the shell.
+
+Since DocuWare does not appear to publish official developer documentation
+for the REST API beyond XSD schema files, this client likely does not cover
+the full functionality of the API.
 
 Please keep in mind: **This is an independent project with no affiliation to
 DocuWare GmbH.**
@@ -82,6 +87,34 @@ See [`docs/oauth2-setup.md`](docs/oauth2-setup.md) for the DocuWare App
 Registration details for each flow, and `examples/oauth2_*.py` for
 complete runnable scripts.
 
+### Bring your own token
+
+If your application handles the OAuth2 login itself — for example via the
+Authorization Code + PKCE flow — you can connect with externally obtained
+tokens using `connect_with_tokens()`:
+
+```python
+import docuware
+
+dw = docuware.connect_with_tokens(
+    url="https://acme.docuware.cloud/DocuWare/Platform",
+    access_token="...",
+    refresh_token="...",
+    token_endpoint="https://acme.docuware.cloud/DocuWare/Identity/connect/token",
+    client_id="your-client-id",
+    on_token_refresh=lambda tokens: save_tokens(tokens),  # optional: persist rotated tokens
+)
+```
+
+The `docuware.oauth` module provides two helpers for the PKCE flow itself:
+`discover_oauth_endpoints()` resolves the authorization and token endpoints
+from a DocuWare instance, and `exchange_pkce_code()` exchanges the
+authorization code for tokens.
+
+See [`examples/oauth2_login.py`](examples/oauth2_login.py) for a complete
+reference implementation including browser launch, local callback server, and
+CSRF state verification.
+
 ### Direct client construction
 
 For more control, use `DocuwareClient` and `login()` explicitly:
@@ -92,6 +125,8 @@ import docuware
 dw = docuware.Client("http://localhost")
 dw.login("username", "password", "organization")
 ```
+
+### Working with the API
 
 Iterate over the organizations and file cabinets and baskets:
 
@@ -334,35 +369,6 @@ org.users.add(user, password="123456")
 ```
 
 
-## OAuth2 / PKCE authentication
-
-If your application handles the OAuth2 login itself — for example via the
-Authorization Code + PKCE flow — you can connect with externally obtained tokens
-using `connect_with_tokens()`:
-
-```python
-import docuware
-
-dw = docuware.connect_with_tokens(
-    url="https://acme.docuware.cloud/DocuWare/Platform",
-    access_token="...",
-    refresh_token="...",
-    token_endpoint="https://acme.docuware.cloud/DocuWare/Identity/connect/token",
-    client_id="your-client-id",
-    on_token_refresh=lambda tokens: save_tokens(tokens),  # optional: persist rotated tokens
-)
-```
-
-The `docuware.oauth` module provides two helpers for the PKCE flow itself:
-`discover_oauth_endpoints()` resolves the authorization and token endpoints from
-a DocuWare instance, and `exchange_pkce_code()` exchanges the authorization code
-for tokens.
-
-See [`examples/oauth2_login.py`](examples/oauth2_login.py) for a complete
-reference implementation including browser launch, local callback server, and
-CSRF state verification.
-
-
 ## CLI usage
 
 This package also includes a simple CLI program for collecting information
@@ -473,6 +479,9 @@ $ dw-client list --file-cabinet Archive --dialog custom --field DocNo
 
 * Entry point to [DocuWare's official documentation][2] of the REST API.
 * Notable endpoint: `/DocuWare/Platform/Content/PlatformLinkModel.pdf`
+* Notable endpoint: `/DocuWare/Platform/Schema/File/schema-0.xsd` — root of
+  the XSD schema files; all other schemas are linked from here via
+  `xs:import` and `xs:include`.
 
 
 ## License
