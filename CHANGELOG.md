@@ -5,6 +5,34 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-05-13
+
+### Added
+
+- **`Authenticator.add_store(store, **options)`**: wire token-rotation
+  persistence onto an authenticator without going through ``connect()``.
+  Extra kwargs are merged into the bundle on every save — typically
+  ``url=...`` so the stored bundle stays self-contained
+- **`examples/credential_store_sqlite.py`**: reference subclass showing
+  ``CredentialStore`` against SQLite with atomic UPSERT and a tenant key
+  column
+
+### Changed
+
+- **README "Direct client construction"** now describes the actual
+  manual-pipeline use case (custom refresh callback, custom browser
+  opener, explicit login step) instead of the misleading password-flow
+  example
+- **`DocuwareClient.login()`** docstring clarifies that the primary use
+  case is executing a pre-configured authenticator; the password kwargs
+  are a backwards-compat fallback
+
+### Fixed
+
+- **PKCE setup docs** now document DocuWare's fixed-port redirect URI
+  constraint so callers know to pin ``redirect_port`` in App
+  Registration setups
+
 ## [0.8.0] - 2026-05-12
 
 ### Added

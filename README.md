@@ -117,14 +117,26 @@ CSRF state verification.
 
 ### Direct client construction
 
-For more control, use `DocuwareClient` and `login()` explicitly:
+`connect()` covers the common cases. For tighter control over the auth
+pipeline — custom refresh callbacks, a custom browser opener, or driving
+the login step explicitly in a larger workflow — build the authenticator
+yourself, pass it to the `DocuwareClient` constructor, and call `login()`:
 
 ```python
 import docuware
 
-dw = docuware.Client("http://localhost")
-dw.login("username", "password", "organization")
+auth = docuware.PkceAuthenticator(
+    client_id="<UUID>",
+    redirect_port=8765,
+    on_browser_open=lambda url: print(f"Open: {url}"),
+)
+dw = docuware.Client("http://localhost", authenticator=auth)
+dw.login()
 ```
+
+In this mode none of `connect()`'s convenience kicks in — no environment
+variables are consulted, and persistence is opt-in via
+`auth.add_store(store, url=...)` before calling `login()`.
 
 ### Working with the API
 

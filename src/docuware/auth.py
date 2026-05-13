@@ -14,7 +14,7 @@ from typing import Any, Callable, ClassVar, Dict, Optional
 
 import httpx
 
-from docuware import cijson, errors, types
+from docuware import cijson, errors, persistence, types
 from docuware.const import ACCEPT_JSON, BASE_HEADERS
 
 log = logging.getLogger(__name__)
@@ -52,8 +52,40 @@ class Authenticator(ABC, types.AuthenticatorP):
 
     METHOD: ClassVar[str] = ""
 
+    #: Optional callback invoked by token-rotating subclasses (Pkce, Token)
+    #: after a successful refresh, with the full bundle (see :meth:`to_bundle`).
+    #: Defined here so callers can wire it polymorphically; non-rotating
+    #: subclasses simply never invoke it.
+    on_token_refresh: Optional[Callable[[Dict[str, Any]], None]] = None
+
     @abstractmethod
     def authenticate(self, conn: types.ConnectionP) -> httpx.Client: ...
+
+    def add_store(
+        self,
+        store: persistence.CredentialStore,
+        **options: Any,
+    ) -> None:
+        """Wire on_token_refresh to persist rotated bundles to ``store``.
+
+        Keyword args in ``options`` are merged into the bundle on every save —
+        typically ``url=...`` so the persisted file is self-contained and can
+        be reloaded by :func:`docuware.connect` without an explicit URL arg.
+        On key collision, ``options`` win over bundle fields.
+
+        No-op for non-rotating authenticators (the callback simply never fires).
+        User-supplied callbacks are left untouched — the user wins.
+        """
+        if self.on_token_refresh is not None:
+            return
+
+        def _callback(bundle: Dict[str, Any]) -> None:
+            try:
+                store.save({**bundle, **options})
+            except OSError as exc:
+                log.warning("Failed to save rotated credentials: %s", exc)
+
+        self.on_token_refresh = _callback
 
     @abstractmethod
     def login(self, conn: types.ConnectionP) -> None: ...

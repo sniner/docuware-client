@@ -26,30 +26,6 @@ def _authenticator_from_bundle(bundle: Dict[str, Any]) -> auth.Authenticator:
     return cls.from_bundle(bundle)
 
 
-def _wire_store_callback(
-    authenticator: auth.Authenticator,
-    store: persistence.CredentialStore,
-    url: str,
-) -> None:
-    """Auto-wire on_token_refresh so token rotation persists to the store.
-
-    Only fires for authenticators that *have* such a hook (Pkce, Token).
-    User-supplied callbacks are left untouched — the user wins.
-    """
-    if not hasattr(authenticator, "on_token_refresh"):
-        return
-    if getattr(authenticator, "on_token_refresh", None) is not None:
-        return
-
-    def _callback(bundle: Dict[str, Any]) -> None:
-        try:
-            store.save({**bundle, "url": url})
-        except OSError as exc:
-            log.warning("Failed to save rotated credentials: %s", exc)
-
-    authenticator.on_token_refresh = _callback  # type: ignore[attr-defined]
-
-
 def _save_bundle(
     store: Optional[persistence.CredentialStore],
     bundle: Dict[str, Any],
@@ -100,6 +76,17 @@ class DocuwareClient(types.DocuwareClientP):
         password: Optional[str] = None,
         organization: Optional[str] = None,
     ) -> DocuwareClient:
+        """Run the configured authenticator's login flow and init the platform.
+
+        Use this when you've built the authenticator yourself (custom refresh
+        callback, custom browser opener, alternative :class:`Connection`) and
+        want to drive the login step explicitly. :func:`connect` is the
+        high-level wrapper that covers the common cases.
+
+        Backwards-compat fallback: if no authenticator was passed to the
+        constructor, the ``username`` / ``password`` / ``organization`` kwargs
+        build a :class:`PasswordGrantAuthenticator` on the fly.
+        """
         if not self.conn.authenticator:
             self.conn.authenticator = auth.PasswordGrantAuthenticator(
                 username=username,
@@ -186,7 +173,7 @@ def connect(
                 "URL is required (arg, env DW_URL, or credential_store containing 'url')"
             )
         if credential_store is not None:
-            _wire_store_callback(authenticator, credential_store, resolved_url)
+            authenticator.add_store(credential_store, url=resolved_url)
         client = DocuwareClient(
             resolved_url,
             verify_certificate=verify_certificate,
@@ -207,7 +194,8 @@ def connect(
         resolved_url = url or os.environ.get("DW_URL") or file_creds.get("url")
         if not resolved_url:
             raise errors.AccountError("URL is required (arg, env DW_URL, or 'url' in store)")
-        _wire_store_callback(rebuilt, credential_store, resolved_url)  # type: ignore[arg-type]
+        assert credential_store is not None  # narrowed by `file_creds` truthiness
+        rebuilt.add_store(credential_store, url=resolved_url)
         client = DocuwareClient(
             resolved_url,
             verify_certificate=verify_certificate,
