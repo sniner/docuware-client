@@ -144,6 +144,50 @@ manager, encrypted DB row), subclass `CredentialStore` and implement
 `load()` / `save()` — atomic. The library calls `save()` once after the
 initial login and after every successful token refresh.
 
+### Database-backed stores
+
+The same pattern works for a database backend — the only requirement is
+that `save()` is atomic. Sketch with SQLite (full version in
+[`examples/credential_store_sqlite.py`](../examples/credential_store_sqlite.py)):
+
+```python
+class SqliteCredentialStore(docuware.CredentialStore):
+    def __init__(self, conn, key="default"):
+        self.conn = conn
+        self.key = key
+        self.conn.isolation_level = None  # manage transactions ourselves
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS dw_credentials ("
+            "    key    TEXT PRIMARY KEY,"
+            "    bundle TEXT NOT NULL"
+            ")"
+        )
+
+    def load(self):
+        row = self.conn.execute(
+            "SELECT bundle FROM dw_credentials WHERE key = ?", (self.key,),
+        ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def save(self, bundle):
+        # BEGIN IMMEDIATE acquires the write lock up front; COMMIT is the
+        # visibility point. AUTOCOMMIT on multi-statement saves
+        # eventually produces a half-written bundle — don't.
+        self.conn.execute("BEGIN IMMEDIATE")
+        self.conn.execute(
+            "INSERT INTO dw_credentials (key, bundle) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET bundle = excluded.bundle",
+            (self.key, json.dumps(bundle)),
+        )
+        self.conn.execute("COMMIT")
+```
+
+The `key` column makes the store multi-tenant: one row per logical
+identity (user, tenant, service account). Single-identity setups can
+just leave it at the default. Store the bundle as JSON text rather than
+opaque bytes — readable rows save time when debugging "why did the
+refresh fail at 03:00".
+
 ## Troubleshooting
 
 **`invalid_request: Invalid redirect_uri`**
