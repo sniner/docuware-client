@@ -166,10 +166,6 @@ def parse_arguments() -> argparse.Namespace:
     detach_parser.add_argument("--id", required=True, help="Document ID")
     detach_parser.add_argument("--attachment-id", required=True, help="Attachment ID")
 
-    # tasks_parser = subparsers.add_parser(
-    #     "tasks", description="Show my tasks"
-    # )
-
     _info_parser = subparsers.add_parser(
         "info", description="Show some information about this DocuWare installation"
     )
@@ -182,22 +178,21 @@ def indent(n: int) -> str:
 
 
 def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
-    def get_first_search_dlg(name: str) -> Optional[docuware.SearchDialog]:
-        name = name.casefold()
-        for org in dw.organizations:
-            for fc in org.all_cabinets:
-                if fc.name.casefold() == name:
-                    for dlg in fc.dialogs:
-                        if isinstance(dlg, docuware.SearchDialog):
-                            return dlg
-        return None
-
     if not args.conditions:
-        return 0
+        print("No search conditions given (FIELDNAME=VALUE)", file=sys.stderr)
+        return 1
 
-    dlg = get_first_search_dlg(args.file_cabinet)
+    fc = get_file_cabinet(dw, args.file_cabinet)
+    if fc is None:
+        print(f"File cabinet '{args.file_cabinet}' not found", file=sys.stderr)
+        return 1
+
+    dlg = fc.search_dialog()
     if dlg is None:
-        return 0
+        print(
+            f"File cabinet '{args.file_cabinet}' has no search dialog", file=sys.stderr
+        )
+        return 1
 
     order_by: Optional[List[tuple]] = None
     if args.order_by:
@@ -232,6 +227,7 @@ def search_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
                 saved_path = docuware.write_binary_file(data, fname)
                 if args.verbose:
                     print(f"Downloaded attachment: {saved_path}", file=sys.stderr)
+    return 0
 
 
 def get_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
@@ -391,7 +387,6 @@ def attach_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
         att = doc.upload_attachment(args.file)
         print(f"Added attachment: {att}")
     except Exception as e:
-        # Get full traceback for debugging? Use verbose?
         print(f"Error attaching file: {e}", file=sys.stderr)
         return 1
     return 0
@@ -459,14 +454,6 @@ def list_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     return 0
 
 
-def tasks_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
-    for org in dw.organizations:
-        print(org)
-        for task in org.my_tasks:
-            print(indent(1), task)
-    return 0
-
-
 def info_cmd(dw: docuware.Client, args: argparse.Namespace) -> Optional[int]:
     for org in dw.organizations:
         print(org)
@@ -492,7 +479,6 @@ COMMANDS: Dict[str, Any] = {
     "list": list_cmd,
     "search": search_cmd,
     "get": get_cmd,
-    "tasks": tasks_cmd,
     "info": info_cmd,
     "create": create_cmd,
     "update": update_cmd,

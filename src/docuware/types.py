@@ -353,7 +353,10 @@ class SearchDialogP(DialogP, Protocol):
     def fields(self) -> Dict[str, SearchFieldP]: ...
 
     def search(
-        self, conditions: SearchConditionsT, operation: Optional[str] = None
+        self,
+        conditions: SearchConditionsT,
+        operation: Optional[str] = None,
+        order_by: Optional[OrderByT] = None,
     ) -> SearchResultP: ...
 
 
@@ -418,6 +421,9 @@ class DocumentAttachmentP(IdNameP, Protocol):
 
 class FieldValueP(IdNameP, Protocol):
     value: Any
+    content_type: Optional[str]
+    read_only: bool
+    internal: bool
 
 
 class MyTasksP(Protocol): ...
