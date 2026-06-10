@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
+import warnings
 from typing import Any, Callable, Dict, Iterator, Optional, Type, Union
 
 from docuware import auth, conn, errors, organization, persistence, structs, types
@@ -273,6 +274,12 @@ def connect_with_tokens(
                           with ``on_token_refresh``.
         on_token_refresh: Mutually exclusive with ``token_store``.
     """
+    warnings.warn(
+        "connect_with_tokens is deprecated, use "
+        "connect(authenticator=TokenAuthenticator(...), credential_store=...)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if token_store is not None and on_token_refresh is not None:
         raise ValueError(
             "token_store and on_token_refresh are mutually exclusive — "

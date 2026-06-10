@@ -13,6 +13,11 @@ from docuware.auth import TokenAuthenticator
 
 BASE_URL = "https://example.com"
 
+# connect_with_tokens is deprecated but still under test until removal
+_DEPRECATION_OK = pytest.mark.filterwarnings(
+    "ignore:connect_with_tokens is deprecated:DeprecationWarning"
+)
+
 
 def _auth_handler():
     def handler(req):
@@ -226,6 +231,7 @@ def _token_handler():
     return handler
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_sets_version():
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
         client = connect_with_tokens(
@@ -239,6 +245,7 @@ def test_connect_with_tokens_sets_version():
     assert isinstance(client.conn.authenticator, TokenAuthenticator)
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_sets_bearer_auth():
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
         client = connect_with_tokens(
@@ -252,6 +259,7 @@ def test_connect_with_tokens_sets_bearer_auth():
     assert client.conn.session.auth.token == "at_123"
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_passes_callback():
     callback = MagicMock()
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
@@ -284,6 +292,7 @@ class _MemoryCredentialStore(CredentialStore):
         self.saves.append(dict(tokens))
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_uses_store_tokens():
     store = _MemoryCredentialStore({"access_token": "from_store", "refresh_token": "rt_store"})
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
@@ -309,6 +318,7 @@ def test_connect_with_tokens_uses_store_tokens():
     assert enriched["client_id"] == "test-client"
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_bootstrap_seeds_empty_store():
     store = _MemoryCredentialStore()  # empty
     with patch("docuware.client.DocuwareClient.__init__", _patched_init(_token_handler())):
@@ -333,6 +343,7 @@ def test_connect_with_tokens_bootstrap_seeds_empty_store():
     }
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_empty_store_without_seed_raises():
     store = _MemoryCredentialStore()  # empty
     with pytest.raises(errors.AccountError, match="token_store is empty"):
@@ -344,6 +355,7 @@ def test_connect_with_tokens_empty_store_without_seed_raises():
         )
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_store_and_callback_mutually_exclusive():
     store = _MemoryCredentialStore({"access_token": "a", "refresh_token": "r"})
     with pytest.raises(ValueError, match="mutually exclusive"):
@@ -356,6 +368,7 @@ def test_connect_with_tokens_store_and_callback_mutually_exclusive():
         )
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_incomplete_store_bundle_raises():
     store = _MemoryCredentialStore({"access_token": "a"})  # no refresh_token
     with pytest.raises(errors.AccountError, match="incomplete bundle"):
@@ -367,6 +380,7 @@ def test_connect_with_tokens_incomplete_store_bundle_raises():
         )
 
 
+@_DEPRECATION_OK
 def test_connect_with_tokens_refresh_triggers_store_save():
     """End-to-end: refresh → save() chain populates the store with rotated tokens."""
     store = _MemoryCredentialStore({"access_token": "old_at", "refresh_token": "old_rt"})

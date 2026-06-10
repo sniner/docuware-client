@@ -9,7 +9,8 @@ import warnings
 
 import pytest
 
-from docuware import OAuth2Authenticator, PasswordGrantAuthenticator
+import docuware
+from docuware import OAuth2Authenticator, PasswordGrantAuthenticator, errors
 
 
 def test_oauth2authenticator_instantiation_warns():
@@ -36,3 +37,10 @@ def test_oauth2authenticator_to_bundle_uses_password_method():
     bundle = auth.to_bundle()
     assert bundle["method"] == "password"
     assert bundle["username"] == "u"
+
+
+def test_connect_with_tokens_warns():
+    with pytest.warns(DeprecationWarning, match="connect_with_tokens is deprecated"):
+        # Fails validation (no tokens given) — the warning must fire first
+        with pytest.raises(errors.AccountError):
+            docuware.connect_with_tokens("https://dw.example.com")

@@ -10,7 +10,7 @@ import warnings
 import webbrowser
 from abc import ABC, abstractmethod
 from collections.abc import Generator
-from typing import Any, Callable, ClassVar, Dict, Optional
+from typing import Any, Callable, ClassVar, Dict, Optional, Union
 
 import httpx
 
@@ -137,6 +137,37 @@ class Authenticator(ABC, types.AuthenticatorP):
             "Failed to post to resource", url=url, status_code=resp.status_code
         )
 
+    def _request_token(
+        self,
+        conn: types.ConnectionP,
+        data: Dict[str, Any],
+        invalid_credentials_msg: str,
+    ) -> str:
+        """Discover the token endpoint and run a token grant against it.
+
+        Shared by the password and client_credentials grants: resolves the
+        Identity Service via KBA-37505 (IdentityServiceInfo → OIDC discovery
+        → token endpoint), posts the grant, and extracts the access token.
+        A 400 response is translated to ``invalid_credentials_msg``.
+        """
+        log.debug("Requesting access token (%s grant)", data.get("grant_type"))
+        res = self._get(conn, "/DocuWare/Platform/Home/IdentityServiceInfo")
+        path = (
+            f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+        )
+        res = self._get(conn, path)
+        path = res.get("token_endpoint") or "/DocuWare/Identity/connect/token"
+        try:
+            result = self._post(conn, path, data=data)
+        except errors.ResourceError as exc:
+            if exc.status_code == 400:
+                raise errors.AccountError(invalid_credentials_msg) from exc
+            raise
+        token = result.get("access_token")
+        if not token:
+            raise errors.AccountError("No access token received")
+        return token
+
 
 # --- Password Grant (RFC 6749 §4.3) ---------------------------------------
 
@@ -165,31 +196,17 @@ class PasswordGrantAuthenticator(Authenticator):
         conn.session.auth = BearerAuth(token) if token else None  # type: ignore[assignment]
 
     def _get_access_token(self, conn: types.ConnectionP) -> str:
-        log.debug("Requesting access token (password grant)")
-        # KBA-37505: IdentityServiceInfo → OIDC discovery → token endpoint
-        res = self._get(conn, "/DocuWare/Platform/Home/IdentityServiceInfo")
-        path = (
-            f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+        return self._request_token(
+            conn,
+            {
+                "grant_type": "password",
+                "username": self.username,
+                "password": self.password,
+                "client_id": "docuware.platform.net.client",
+                "scope": "docuware.platform",
+            },
+            "Login failed: invalid username or password",
         )
-        res = self._get(conn, path)
-        path = res.get("token_endpoint") or "/DocuWare/Identity/connect/token"
-        data = {
-            "grant_type": "password",
-            "username": self.username,
-            "password": self.password,
-            "client_id": "docuware.platform.net.client",
-            "scope": "docuware.platform",
-        }
-        try:
-            result = self._post(conn, path, data=data)
-        except errors.ResourceError as exc:
-            if exc.status_code == 400:
-                raise errors.AccountError("Login failed: invalid username or password") from exc
-            raise
-        token = result.get("access_token")
-        if not token:
-            raise errors.AccountError("No access token received")
-        return token
 
     def authenticate(self, conn: types.ConnectionP) -> httpx.Client:
         self._apply_access_token(conn, None)
@@ -255,6 +272,11 @@ class ClientCredentialsAuthenticator(Authenticator):
     No refresh_token (RFC §4.4.3: "SHOULD NOT be included"). On 401/403 the
     library re-requests a fresh access_token from the stored client_secret;
     that re-acquisition is the substitute for refresh.
+
+    ``verify`` is accepted for signature symmetry with the other
+    authenticators but has no effect here: all requests run through the
+    Connection's session, which already carries the TLS settings from
+    ``verify_certificate``.
     """
 
     METHOD = "client_credentials"
@@ -274,31 +296,16 @@ class ClientCredentialsAuthenticator(Authenticator):
         self.access_token: Optional[str] = None
 
     def _get_access_token(self, conn: types.ConnectionP) -> str:
-        log.debug("Requesting access token (client_credentials grant)")
-        res = self._get(conn, "/DocuWare/Platform/Home/IdentityServiceInfo")
-        path = (
-            f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+        return self._request_token(
+            conn,
+            {
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "scope": self.scope,
+            },
+            "Client credentials login failed: invalid client_id or client_secret",
         )
-        res = self._get(conn, path)
-        path = res.get("token_endpoint") or "/DocuWare/Identity/connect/token"
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "scope": self.scope,
-        }
-        try:
-            result = self._post(conn, path, data=data)
-        except errors.ResourceError as exc:
-            if exc.status_code == 400:
-                raise errors.AccountError(
-                    "Client credentials login failed: invalid client_id or client_secret"
-                ) from exc
-            raise
-        token = result.get("access_token")
-        if not token:
-            raise errors.AccountError("No access token received")
-        return token
 
     def authenticate(self, conn: types.ConnectionP) -> httpx.Client:
         conn.session.auth = None  # type: ignore[assignment]
@@ -329,6 +336,47 @@ class ClientCredentialsAuthenticator(Authenticator):
             client_secret=bundle["client_secret"],
             scope=bundle.get("scope", "docuware.platform"),
         )
+
+
+def _run_refresh_grant(
+    auth: Union[PkceAuthenticator, TokenAuthenticator],
+    conn: types.ConnectionP,
+) -> httpx.Client:
+    """Run the refresh_token grant shared by Pkce and Token authenticators.
+
+    Rotates ``auth.access_token`` (and ``auth.refresh_token`` if the server
+    rotates it), re-applies the bearer auth to the session, and forwards the
+    full bundle to ``on_token_refresh`` so consumers (e.g.
+    ``CredentialStore.save``) get a self-contained shape they can reload on
+    the next process start.
+    """
+    data: Dict[str, Any] = {
+        "grant_type": "refresh_token",
+        "refresh_token": auth.refresh_token,
+        "client_id": auth.client_id,
+    }
+    if auth.client_secret:
+        data["client_secret"] = auth.client_secret
+    resp = httpx.post(auth.token_endpoint or "", data=data, timeout=15, verify=auth.verify)
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 400:
+            raise errors.AccountError(
+                "Refresh token expired or revoked — re-authentication required"
+            ) from exc
+        raise
+    tokens = resp.json()
+    token = tokens.get("access_token")
+    if not token:
+        raise errors.AccountError("No access token in refresh response")
+    auth.access_token = token
+    if "refresh_token" in tokens:
+        auth.refresh_token = tokens["refresh_token"]
+    auth._apply(conn)
+    if auth.on_token_refresh:
+        auth.on_token_refresh(auth.to_bundle())
+    return conn.session
 
 
 # --- Authorization Code + PKCE (RFC 6749 §4.1 + RFC 7636) -----------------
@@ -443,9 +491,9 @@ class PkceAuthenticator(Authenticator):
             opener = self.on_browser_open or webbrowser.open
             opener(auth_url)
 
-            deadline = time.time() + self.callback_timeout
+            deadline = time.monotonic() + self.callback_timeout
             while _Handler.code is None and _Handler.error is None:
-                remaining = deadline - time.time()
+                remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise errors.AccountError(
                         f"PKCE login timed out after {self.callback_timeout}s "
@@ -485,33 +533,7 @@ class PkceAuthenticator(Authenticator):
             raise errors.AccountError(
                 "PkceAuthenticator cannot refresh: no refresh_token or token_endpoint stored"
             )
-        data: Dict[str, Any] = {
-            "grant_type": "refresh_token",
-            "refresh_token": self.refresh_token,
-            "client_id": self.client_id,
-        }
-        if self.client_secret:
-            data["client_secret"] = self.client_secret
-        resp = httpx.post(self.token_endpoint, data=data, timeout=15, verify=self.verify)
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 400:
-                raise errors.AccountError(
-                    "Refresh token expired or revoked — re-authentication required"
-                ) from exc
-            raise
-        tokens = resp.json()
-        token = tokens.get("access_token")
-        if not token:
-            raise errors.AccountError("No access token in refresh response")
-        self.access_token = token
-        if "refresh_token" in tokens:
-            self.refresh_token = tokens["refresh_token"]
-        self._apply(conn)
-        if self.on_token_refresh:
-            self.on_token_refresh(self.to_bundle())
-        return conn.session
+        return _run_refresh_grant(self, conn)
 
     def logoff(self, conn: types.ConnectionP) -> None:
         # DocuWare's IdentityServer has no standard revocation endpoint;
@@ -594,36 +616,7 @@ class TokenAuthenticator(Authenticator):
 
     def authenticate(self, conn: types.ConnectionP) -> httpx.Client:
         """Refresh the access token and re-apply it to the session."""
-        try:
-            data = {
-                "grant_type": "refresh_token",
-                "refresh_token": self.refresh_token,
-                "client_id": self.client_id,
-            }
-            if self.client_secret:
-                data["client_secret"] = self.client_secret
-            resp = httpx.post(self.token_endpoint, data=data, timeout=15, verify=self.verify)
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 400:
-                raise errors.AccountError(
-                    "Refresh token expired or revoked — re-authentication required"
-                ) from exc
-            raise
-        tokens = resp.json()
-        token = tokens.get("access_token")
-        if not token:
-            raise errors.AccountError("No access token in refresh response")
-        self.access_token = token
-        if "refresh_token" in tokens:
-            self.refresh_token = tokens["refresh_token"]
-        self._apply(conn)
-        if self.on_token_refresh:
-            # Forward the full bundle, not just the raw token response — this way
-            # consumers (e.g. CredentialStore.save) get a self-contained shape
-            # they can reload into a TokenAuthenticator on next process start.
-            self.on_token_refresh(self.to_bundle())
-        return conn.session
+        return _run_refresh_grant(self, conn)
 
     def logoff(self, conn: types.ConnectionP) -> None:
         conn.session.auth = None  # type: ignore[assignment]
