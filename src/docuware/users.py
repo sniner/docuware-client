@@ -142,10 +142,10 @@ class User:
                 _result = self.organization.conn.post_json(
                     self.organization.endpoints["userInfo"], json=body
                 )
-            except httpx.HTTPError as exc:
+            except (httpx.HTTPError, errors.ResourceError) as exc:
                 raise errors.UserOrGroupError(
                     f"Unable to set activation status of user {self}: {exc}"
-                )
+                ) from exc
             else:
                 self._active = state
 
@@ -180,19 +180,18 @@ class Users(types.UsersP):
         headers = {
             "Content-Type": "application/vnd.docuware.platform.createorganizationuser+json"
         }
+        body = user.as_dict()
+        if "DBName" not in body:
+            body["DBName"] = user.make_db_name()
+        body["Password"] = password or utils.random_password()
         try:
-            body = user.as_dict()
-            if "DBName" not in body:
-                body["DBName"] = user.make_db_name()
-            body["Password"] = password or utils.random_password()
             _result = self.organization.conn.post_json(
                 self.organization.endpoints["userInfo"],
                 headers=headers,
                 json=body,
             )
-        except Exception as exc:
-            log.debug("Unable to create user %s: %s", user, exc)
-            return None
+        except (httpx.HTTPError, errors.ResourceError) as exc:
+            raise errors.UserOrGroupError(f"Unable to create user {user}: {exc}") from exc
         # The API response does not reliably return the created user object,
         # so we search the updated user list by DBName to return the new user.
         for item in self:
@@ -236,15 +235,16 @@ class Group:
         body = {"Ids": [self.id], "OperationType": "Add" if include else "Remove"}
 
         try:
+            # conn.put() raises on any non-2xx status, so reaching the
+            # return below means the server accepted the change.
             _result = self.organization.conn.put(
                 "/DocuWare/Platform/Organization/UserGroups",
                 headers=headers,
                 params={"UserId": user.id},
                 json=body,
             )
-            # FIXME: check result
-        except Exception as exc:
-            log.debug("Changing group membership of user %s failed: %s", user, exc)
+        except (httpx.HTTPError, errors.ResourceError) as exc:
+            log.warning("Changing group membership of user %s failed: %s", user, exc)
             return False
         return True
 

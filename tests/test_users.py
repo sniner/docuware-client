@@ -174,6 +174,16 @@ class TestUserActiveSetter(unittest.TestCase):
         with self.assertRaises(errors.UserOrGroupError):
             u.active = True
 
+    def test_active_setter_wraps_resource_error(self):
+        mock_org, mock_conn = _make_org()
+        mock_conn.post_json.side_effect = errors.ResourceError(
+            "POST 500", status_code=500
+        )
+        u = _make_user(org=mock_org, active=False)
+        with self.assertRaises(errors.UserOrGroupError):
+            u.active = True
+        self.assertFalse(u._active)
+
     def test_active_setter_makes_http_call(self):
         mock_org, mock_conn = _make_org()
         mock_conn.post_json.return_value = {}
@@ -252,6 +262,16 @@ class TestUsers(unittest.TestCase):
         # Result may be None if DBName doesn't match (acceptable)
         # Just verify no exception was raised
 
+    def test_users_add_wraps_resource_error(self):
+        new_user = users.User(first_name="New", last_name="User")
+        mock_org, mock_conn = _make_org()
+        mock_conn.post_json.side_effect = errors.ResourceError(
+            "POST 409", status_code=409
+        )
+        user_list = users.Users(mock_org)
+        with self.assertRaises(errors.UserOrGroupError):
+            user_list.add(new_user, password="secret123")
+
 
 class TestGroup(unittest.TestCase):
     def test_group_from_response(self):
@@ -307,6 +327,16 @@ class TestGroup(unittest.TestCase):
         mock_user.id = ""
         with self.assertRaises(errors.UserOrGroupError):
             g._set_user_membership(mock_user, include=True)
+
+    def test_add_user_returns_false_on_resource_error(self):
+        mock_org, mock_conn = _make_org()
+        mock_conn.put.side_effect = errors.ResourceError("PUT 500", status_code=500)
+        g = users.Group.from_response(
+            {"Id": "g1", "Name": "G", "Links": []}, mock_org
+        )
+        mock_user = MagicMock()
+        mock_user.id = "42"
+        self.assertFalse(g.add_user(mock_user))
 
     def test_add_user_returns_true_on_success(self):
         mock_org, mock_conn = _make_org()
