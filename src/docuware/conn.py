@@ -18,6 +18,28 @@ log = logging.getLogger(__name__)
 _DEFAULT_TIMEOUT: float = float(os.environ.get("DW_TIMEOUT", "30"))
 
 
+def _rewind_files(files: Dict[str, Any]) -> bool:
+    """Rewind file-like objects in an httpx ``files`` mapping for a retry.
+
+    Returns False if any stream cannot be rewound (already closed, pipe,
+    …) — in that case the request must not be retried, because the first
+    attempt has consumed the stream and a retry would upload empty content.
+    """
+    for value in files.values():
+        fileobj: Any = value
+        if isinstance(value, tuple):
+            if len(value) < 2:
+                continue
+            fileobj = value[1]
+        if fileobj is None or isinstance(fileobj, (bytes, str)):
+            continue
+        try:
+            fileobj.seek(0)
+        except (AttributeError, OSError, ValueError):
+            return False
+    return True
+
+
 def _server_message(resp: httpx.Response) -> Optional[str]:
     """Extract DocuWare's 'Message' field from a JSON error response, if present."""
     try:
@@ -88,6 +110,14 @@ class Connection(types.ConnectionP):
         )
         resp = self.session.request(method, url, **kwargs)
         if resp.status_code in (401, 403) and self.authenticator:
+            if files and not _rewind_files(files):
+                log.warning(
+                    "Not retrying %s %s after %s: upload stream cannot be rewound",
+                    method,
+                    url,
+                    resp.status_code,
+                )
+                return resp
             self.session = self.authenticator.authenticate(self)
             resp = self.session.request(method, url, **kwargs)
         return resp

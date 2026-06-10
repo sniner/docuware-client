@@ -193,6 +193,67 @@ def test_request_retries_on_401():
     assert protected_calls["n"] == 2
 
 
+def _upload_retry_handler(uploads):
+    """Handler that 401s the first upload and records each uploaded body."""
+
+    def handler(req):
+        path = req.url.path
+        if "/IdentityServiceInfo" in path:
+            return httpx.Response(200, json={"IdentityServiceUrl": f"{BASE}/DocuWare/Identity"})
+        if "openid-configuration" in path:
+            return httpx.Response(
+                200, json={"token_endpoint": "/DocuWare/Identity/connect/token"}
+            )
+        if "/connect/token" in path:
+            return httpx.Response(200, json={"access_token": "new_tok"})
+        if path == "/DocuWare/Platform/upload":
+            uploads.append(req.read())
+            if len(uploads) == 1:
+                return httpx.Response(401)
+            return httpx.Response(200, json={})
+        return httpx.Response(404)
+
+    return handler
+
+
+def test_request_rewinds_file_stream_before_retry():
+    import io
+
+    uploads = []
+    conn = _conn(_upload_retry_handler(uploads))
+    conn.authenticator = PasswordGrantAuthenticator("user", "pass")
+    payload = b"file content"
+    stream = io.BytesIO(payload)
+    resp = conn.post("/DocuWare/Platform/upload", files={"file": ("a.txt", stream, "text/plain")})
+    assert resp.status_code == 200
+    assert len(uploads) == 2
+    # The retried request must contain the full file content again
+    assert payload in uploads[1]
+
+
+def test_request_does_not_retry_with_unrewindable_stream():
+    import io
+
+    class NoSeekStream:
+        """File-like object without seek(), e.g. a pipe or socket wrapper."""
+
+        def __init__(self, data: bytes):
+            self._buf = io.BytesIO(data)
+
+        def read(self, n: int = -1) -> bytes:
+            return self._buf.read(n)
+
+    uploads = []
+    conn = _conn(_upload_retry_handler(uploads))
+    conn.authenticator = PasswordGrantAuthenticator("user", "pass")
+    stream = NoSeekStream(b"file content")
+    with pytest.raises(errors.ResourceError) as excinfo:
+        conn.post("/DocuWare/Platform/upload", files={"file": ("a.txt", stream, "text/plain")})
+    assert excinfo.value.status_code == 401
+    # No second upload attempt with a consumed stream
+    assert len(uploads) == 1
+
+
 # --- Connection.get ---
 
 
