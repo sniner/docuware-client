@@ -84,38 +84,32 @@ class Document:
         data = {"Field": json_fields}
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-        # We need the Fields endpoint. If not present, try to guess or fetch self.
         endpoint = self.endpoints.get("fields")
         if not endpoint:
-            # Fallback: append /Fields to self (risky but common) or use a known relation
-            # Usually "fields" is the relation name.
-            # If missing, maybe reload doc?
-            if "self" in self.endpoints:
-                endpoint = self.endpoints["self"] + "/Fields"
-            else:
-                raise ValueError("Cannot update document without fields endpoint")
+            # Some document representations omit the "fields" relation; the
+            # platform exposes it at <self>/Fields.
+            if "self" not in self.endpoints:
+                raise errors.InternalError(
+                    f"Document {self.id!r} has neither a 'fields' nor a 'self' endpoint"
+                )
+            endpoint = self.endpoints["self"] + "/Fields"
 
         _ = self.client.conn.put_json(endpoint, headers=headers, json=data)
-        # Reload key properties? For now just return self.
-        # Ideally we should fetch the updated doc to be consistent, but let's assume success.
         return self
 
     def upload_attachment(
         self, file: Union[pathlib.Path, str, IO[bytes]]
     ) -> DocumentAttachment:
         self._assert_alive()
-        endpoint = self.endpoints.get(
-            "files"
-        )  # "files" or "sections"? usually "postFile" or "files"
-        # Checking standard relations: "files" is often for uploading new sections.
+        # New sections are posted to the "files" relation; older server
+        # versions expose only "sections", which accepts the same POST.
+        endpoint = self.endpoints.get("files") or self.endpoints.get("sections")
         if not endpoint:
-            # Check if we have a "sections" relation, maybe post there?
-            if "sections" in self.endpoints:
-                endpoint = self.endpoints["sections"]
-            elif "self" in self.endpoints:
-                endpoint = self.endpoints["self"] + "/Sections"  # Guessing
-            else:
-                raise ValueError("Cannot find endpoint to upload attachment")
+            if "self" not in self.endpoints:
+                raise errors.InternalError(
+                    f"Document {self.id!r} has no endpoint to upload an attachment to"
+                )
+            endpoint = self.endpoints["self"] + "/Sections"
 
         mime_type = "application/octet-stream"
         filename = "attachment"
@@ -124,62 +118,46 @@ class Document:
         if isinstance(file, (str, pathlib.Path)):
             path = pathlib.Path(file)
             filename = path.name
-            mime_type, _ = mimetypes.guess_type(path)
-            mime_type = mime_type or "application/octet-stream"
+            guessed, _ = mimetypes.guess_type(path)
+            mime_type = guessed or mime_type
             opened_file = open(path, "rb")
             content = opened_file
         else:
             content = file
             if hasattr(file, "name"):
                 filename = pathlib.Path(file.name).name
-                mime_type, _ = mimetypes.guess_type(filename)
-                mime_type = mime_type or "application/octet-stream"
+                guessed, _ = mimetypes.guess_type(filename)
+                mime_type = guessed or mime_type
 
         try:
-            # Prepare multipart upload
+            # httpx sets the multipart boundary; no manual Content-Type here
             files = {"file": (filename, content, mime_type)}
-            # Do not set Content-Type header manually, httpx handles multipart boundary
-
-            # Post expecting JSON response of the created section?
-            # Or just success.
-            # DocuWare postFile usually returns the updated Document or the Section?
-            # Creating a section usually returns the Section info.
-
             resp = self.client.conn.post(endpoint, files=files)
-            resp.raise_for_status()
-
-            # If response is the section info, modify self.attachments?
-            # Ideally reload the document to get full state.
-            # But let's try to parse the response if it looks like a Section.
-            try:
-                data = cijson.loads(resp.text)
-                if data and "ContentType" in data:
-                    new_att = DocumentAttachment(data, self)
-                    self.attachments.append(new_att)
-                    return new_att
-            except ValueError:
-                pass
-
-            # If parsing failed or different response, just return a dummy or reload
-            pass
-
         finally:
             if opened_file:
                 opened_file.close()
 
-        # Reloading to be safe
+        # The platform answers with the created section
+        try:
+            data = cijson.loads(resp.text)
+        except ValueError:
+            data = None
+        if data and "ContentType" in data:
+            new_att = DocumentAttachment(data, self)
+            self.attachments.append(new_att)
+            return new_att
+
+        # Unexpected response shape: reload the document and find the new
+        # section by its original filename
         doc_data = self.client.conn.get_json(self.endpoints["self"])
         self.attachments = [DocumentAttachment(s, self) for s in doc_data.get("Sections", [])]
-
-        # Try to find the new attachment
         for att in reversed(self.attachments):
             if att.filename == filename:
                 return att
 
-        if self.attachments:
-            return self.attachments[-1]
-
-        raise ValueError("Attachment uploaded but not found in reloaded document")
+        raise errors.InternalError(
+            f"Attachment {filename!r} uploaded but not found in reloaded document"
+        )
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} '{self.title}' [{self.id}]"
@@ -231,21 +209,15 @@ class DocumentAttachment:
         return self.textshot().text
 
     def delete(self) -> None:
+        # _fetch_endpoints() itself needs the "self" relation, so there is no
+        # way to recover when it is missing.
         if "self" not in self.endpoints:
-            self._fetch_endpoints()
-            if "self" not in self.endpoints:
-                raise ValueError("Cannot delete attachment without self endpoint")
-
+            raise errors.InternalError(
+                f"Attachment {self.id!r} has no self endpoint, cannot delete"
+            )
         self.client.conn.delete(self.endpoints["self"])
-        # Remove from parent list
-        if self in self.document.attachments:
-            # self.document.attachments is a list
-            # We need to cast it to list to remove, but type hint says it is list in __init__
-            # though Protocol says Sequence.
-            # In existing code: self.attachments = [ ... ]
-            # So it is a list.
-            if isinstance(self.document.attachments, list):
-                self.document.attachments.remove(self)
+        if isinstance(self.document.attachments, list) and self in self.document.attachments:
+            self.document.attachments.remove(self)
 
     def __str__(self) -> str:
         return f"Attachment '{self.filename}' [{self.id}, {self.content_type}]"
