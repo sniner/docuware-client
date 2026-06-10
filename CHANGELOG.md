@@ -5,6 +5,52 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-06-10
+
+### Added
+
+- **`OAuthDiscoveryError`**: OAuth2 endpoint discovery failures are now part of the
+  library's exception hierarchy. The class also subclasses ``RuntimeError``, so
+  existing ``except RuntimeError`` handlers keep working
+
+### Changed
+
+- **`ResourceNotFoundError`** is now a subclass of ``ResourceError`` (previously a
+  sibling). ``Connection.get_bytes()`` raises it only for HTTP 404; other failure
+  statuses raise ``ResourceError``, so server errors no longer look like missing
+  documents
+- **`connect_with_tokens()`** now emits a ``DeprecationWarning`` (deprecated since
+  0.8.0 — use ``connect(authenticator=TokenAuthenticator(...))``)
+- **`dw-client search`** reports a missing file cabinet, a cabinet without search
+  dialog, and missing conditions to stderr and exits with 1 instead of silently
+  succeeding. The search now uses the cabinet's default search dialog
+
+### Fixed
+
+- **Date parsing**: ``/Date(...)/`` values with negative timestamps (pre-1970) or a
+  UTC offset suffix no longer raise ``DataError`` — negative timestamps are treated
+  as missing, so one corrupted date entry cannot abort iteration over the remaining
+  documents of a search result
+- **Upload retry**: after re-authentication on 401/403, file streams are rewound
+  before the request is retried. Previously the retry silently uploaded an empty
+  body when a token expired mid-upload; streams that cannot be rewound are no
+  longer retried at all
+- **`User.active` / `Users.add()`**: HTTP failures now surface as
+  ``UserOrGroupError``. ``Users.add()`` no longer swallows every exception and
+  returns ``None``, so callers can tell a server error from a missing user
+- **Search conditions**: tuple values (e.g. open ranges as ``(value, None)``) are
+  now accepted everywhere lists are
+- **Field values**: ``"Item": null`` in keyword fields and structured values in
+  numeric fields no longer crash; they yield ``None`` or a ``DataError``
+- **`Document.upload_attachment()`** raises ``InternalError`` when the new section
+  cannot be identified instead of returning the last attachment, which could be a
+  different upload's section
+
+### Removed
+
+- **`dw-client tasks`**: the command was unreachable (its argument parser was never
+  registered) and the underlying API has never worked
+
 ## [0.8.1] - 2026-05-13
 
 ### Added
