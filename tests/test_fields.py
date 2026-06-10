@@ -131,6 +131,13 @@ def test_keywords_field_value_empty_list():
     assert fv.value is None
 
 
+def test_keywords_field_value_null_item():
+    # Server may send "Item": null — must not raise AttributeError
+    config = _make_config(ItemElementName="Keywords", Item=None)
+    fv = KeywordsFieldValue(config)
+    assert fv.value is None
+
+
 # --- IntFieldValue ---
 
 def test_int_field_value_valid():
@@ -147,6 +154,13 @@ def test_int_field_value_none():
 
 def test_int_field_value_invalid():
     config = _make_config(ItemElementName="Int", Item="abc")
+    with pytest.raises(DataError):
+        IntFieldValue(config)
+
+
+def test_int_field_value_non_scalar_item():
+    # Unexpected structured value → DataError, not TypeError
+    config = _make_config(ItemElementName="Int", Item={"nested": 1})
     with pytest.raises(DataError):
         IntFieldValue(config)
 

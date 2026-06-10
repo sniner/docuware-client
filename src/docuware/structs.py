@@ -45,7 +45,14 @@ class ResourcePattern:
     ) -> str:
         s = self.pattern
         for name, value in data.items():
-            s, n = re.subn("\\{" + name + "\\}", value, s, flags=re.IGNORECASE)
+            # re.escape the key and replace via callable so that regex
+            # metacharacters in keys and backslashes in values stay literal.
+            s, n = re.subn(
+                "\\{" + re.escape(name) + "\\}",
+                lambda _match: value,
+                s,
+                flags=re.IGNORECASE,
+            )
             if strict and n <= 0:
                 raise errors.InternalError(
                     f"Key '{name}' not found in pattern '{self.pattern}'"

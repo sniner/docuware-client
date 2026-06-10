@@ -43,7 +43,7 @@ class StringFieldValue(FieldValue):
 class KeywordsFieldValue(FieldValue):
     def __init__(self, config: FieldValueConfigT):
         super().__init__(config)
-        values = config.get("Item", {}).get("Keyword", [])
+        values = (config.get("Item") or {}).get("Keyword", [])
         self.value = values if values else None
 
     def __str__(self) -> str:
@@ -55,7 +55,7 @@ class IntFieldValue(FieldValue):
         super().__init__(config)
         try:
             self.value = None if self.value is None else int(self.value)
-        except ValueError:
+        except (ValueError, TypeError):
             raise errors.DataError(
                 f"Value of field '{self.id}' is expected to be of type integer, found '{self.value}'"
             )
@@ -69,7 +69,7 @@ class DecimalFieldValue(FieldValue):
         super().__init__(config)
         try:
             self.value = None if self.value is None else float(self.value)
-        except ValueError:
+        except (ValueError, TypeError):
             raise errors.DataError(
                 f"Value of field '{self.id}' is expected to be of type float, found '{self.value}'"
             )

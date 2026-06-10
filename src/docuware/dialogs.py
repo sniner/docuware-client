@@ -219,7 +219,7 @@ class ConditionParser:
     ) -> Tuple[str, List[Optional[str]]]:
         field = self.field_by_name(name)
         converted: List[Optional[str]]
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             if len(value) == 2 and (value[0] is None or value[1] is None):
                 # Open-ended range: keep None as None so JSON serialises it
                 # as null (DocuWare expects null for open range bounds).

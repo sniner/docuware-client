@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Any, Dict, Iterator, List, Optional, Union
+from typing import Any, Iterator, List, Optional, Union
 
 log = logging.getLogger(__name__)
 
-TextShotConfigT = Dict[str, Any]
+# Mapping rather than Dict: real connections deliver CaseInsensitiveDict,
+# which is a MutableMapping but not a dict.
+TextShotConfigT = Mapping[str, Any]
 
 
 def _as_list(value: Any) -> List[Any]:

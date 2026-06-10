@@ -138,6 +138,14 @@ def test_condition_parser_closed_range_unchanged(condition_parser):
     assert result == [("FIELD1", ["2025-01-01", "2025-12-31"])]
 
 
+def test_condition_parser_tuple_treated_like_list(condition_parser):
+    # Tuples must behave exactly like lists, including open ranges
+    result = condition_parser.parse({"FIELD1": ("2025-01-01", None)})
+    assert result == [("FIELD1", ["2025-01-01", None])]
+    result = condition_parser.parse({"FIELD1": ("a", "b")})
+    assert result == [("FIELD1", ["a", "b"])]
+
+
 def test_condition_parser_dict_datetime(condition_parser):
     # datetime value → ISO 8601 format
     dt = datetime(2024, 3, 15, 12, 0, 0)

@@ -27,6 +27,11 @@ class StructTests(unittest.TestCase):
             strict=True,
         )
 
+    def test_ResourcePattern_literal_backslash_in_value(self):
+        # Backslashes in values must not be interpreted as regex escapes
+        p = ResourcePattern({"Name": "doc", "UriPattern": "/docs/{docId}"})
+        self.assertEqual(p.apply({"docId": "a\\1b"}), "/docs/a\\1b")
+
     ENDPOINT_TEST_DATA = {
         "Links": [
             {"rel": "schemaSearch", "href": "/DocuWare/Platform/Schema/Search"},
