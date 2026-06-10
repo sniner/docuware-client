@@ -170,7 +170,9 @@ def discover_oauth_endpoints(
         ``token_endpoint``, and ``identity_service_url``.
 
     Raises:
-        RuntimeError: If either request fails or the expected fields are absent.
+        errors.OAuthDiscoveryError: If either request fails or the expected
+            fields are absent.  Subclasses RuntimeError for backwards
+            compatibility.
     """
     platform_url = normalize_docuware_url(docuware_url)
     info_url = platform_url.rstrip("/") + "/Home/IdentityServiceInfo"
@@ -184,16 +186,20 @@ def discover_oauth_endpoints(
         )
         resp.raise_for_status()
     except Exception as exc:
-        raise RuntimeError(f"DocuWare not reachable ({info_url}): {exc}") from exc
+        raise errors.OAuthDiscoveryError(
+            f"DocuWare not reachable ({info_url}): {exc}"
+        ) from exc
 
     try:
         info = resp.json()
         identity_url = (info.get("IdentityServiceUrl") or "").strip()
     except Exception as exc:
-        raise RuntimeError(f"Could not parse IdentityServiceInfo: {exc}") from exc
+        raise errors.OAuthDiscoveryError(
+            f"Could not parse IdentityServiceInfo: {exc}"
+        ) from exc
 
     if not identity_url:
-        raise RuntimeError("IdentityServiceUrl missing in DocuWare response.")
+        raise errors.OAuthDiscoveryError("IdentityServiceUrl missing in DocuWare response.")
 
     discovery_url = identity_url.rstrip("/") + "/.well-known/openid-configuration"
     try:
@@ -201,12 +207,16 @@ def discover_oauth_endpoints(
         resp2.raise_for_status()
         oidc = resp2.json()
     except Exception as exc:
-        raise RuntimeError(f"OpenID Connect discovery failed ({discovery_url}): {exc}") from exc
+        raise errors.OAuthDiscoveryError(
+            f"OpenID Connect discovery failed ({discovery_url}): {exc}"
+        ) from exc
 
     auth_ep = oidc.get("authorization_endpoint", "")
     token_ep = oidc.get("token_endpoint", "")
     if not auth_ep or not token_ep:
-        raise RuntimeError("Endpoints missing in OpenID Connect discovery response.")
+        raise errors.OAuthDiscoveryError(
+            "Endpoints missing in OpenID Connect discovery response."
+        )
 
     return OAuthEndpoints(auth_ep, token_ep, identity_url)
 

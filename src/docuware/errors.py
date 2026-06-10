@@ -9,6 +9,7 @@ __all__ = [
     "InternalError",
     "ApiError",
     "SearchConditionError",
+    "OAuthDiscoveryError",
     "ResourceError",
     "ResourceNotFoundError",
     "UserOrGroupError",
@@ -59,8 +60,17 @@ class ResourceError(ApiError):
     pass
 
 
-class ResourceNotFoundError(ApiError):
+class ResourceNotFoundError(ResourceError):
     pass
+
+
+class OAuthDiscoveryError(DocuwareClientException, RuntimeError):
+    """OAuth2 endpoint discovery failed.
+
+    Also subclasses RuntimeError because the discovery helpers in
+    :mod:`docuware.oauth` historically raised plain RuntimeError; existing
+    ``except RuntimeError`` handlers keep working.
+    """
 
 
 class UserOrGroupError(ApiError):

@@ -315,6 +315,16 @@ class TestDiscoverOAuthEndpoints:
             with pytest.raises(RuntimeError, match="not reachable"):
                 discover_oauth_endpoints(DW_URL)
 
+    def test_discovery_error_is_library_exception(self):
+        # OAuthDiscoveryError is part of the library hierarchy AND still a
+        # RuntimeError for backwards compatibility
+        from docuware import errors
+
+        with patch("docuware.oauth.httpx.get", side_effect=httpx.ConnectError("refused")):
+            with pytest.raises(errors.DocuwareClientException):
+                discover_oauth_endpoints(DW_URL)
+        assert issubclass(errors.OAuthDiscoveryError, RuntimeError)
+
     def test_raises_on_missing_identity_url(self):
         info_resp = MagicMock(spec=httpx.Response)
         info_resp.status_code = 200

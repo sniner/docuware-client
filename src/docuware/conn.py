@@ -308,7 +308,10 @@ class Connection(types.ConnectionP):
                 content_disposition.get("filename") or "unknown.bin",
             )
         msg = _server_message(resp)
-        raise errors.ResourceNotFoundError(
+        error_cls = (
+            errors.ResourceNotFoundError if resp.status_code == 404 else errors.ResourceError
+        )
+        raise error_cls(
             f"Download failed {resp.status_code}" + (f": {msg}" if msg else ""),
             url=url,
             status_code=resp.status_code,

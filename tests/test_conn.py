@@ -369,10 +369,18 @@ def test_get_bytes_raises_on_content_length_mismatch():
         _conn(handler).get_bytes("/file")
 
 
-def test_get_bytes_raises_resource_not_found_on_error():
+def test_get_bytes_raises_resource_not_found_on_404():
     conn = _conn(lambda req: httpx.Response(404, json={"Message": "Not found"}))
     with pytest.raises(errors.ResourceNotFoundError):
         conn.get_bytes("/file")
+
+
+def test_get_bytes_raises_resource_error_on_server_error():
+    # Non-404 failures must not masquerade as "not found"
+    conn = _conn(lambda req: httpx.Response(500, json={"Message": "Boom"}))
+    with pytest.raises(errors.ResourceError) as excinfo:
+        conn.get_bytes("/file")
+    assert not isinstance(excinfo.value, errors.ResourceNotFoundError)
 
 
 # --- TokenAuthenticator ---
