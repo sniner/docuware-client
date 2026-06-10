@@ -97,10 +97,18 @@ def test_safe_str_int_input():
 
 # --- _parse_timestamp() via datetime_from_string() ---
 
-def test_datetime_from_string_negative_timestamp_raises():
-    # /Date(-N)/ does not match the \d+ regex → DataError
-    with pytest.raises(DataError):
-        datetime_from_string("/Date(-86400000)/")
+def test_datetime_from_string_negative_timestamp_is_missing():
+    # Pre-1970 timestamps mark corrupted/absent dates; they must not break
+    # iteration over the remaining documents of a search result.
+    assert datetime_from_string("/Date(-86400000)/") is None
+
+
+def test_datetime_from_string_utc_offset_suffix():
+    # .NET JSON date variant with informational UTC offset
+    dt = datetime(2024, 6, 15, 14, 30, 0)
+    ts_ms = int(dt.timestamp() * 1000)
+    assert datetime_from_string(f"/Date({ts_ms}+0200)/") == dt
+    assert datetime_from_string(f"/Date({ts_ms}-0500)/") == dt
 
 
 def test_datetime_from_string_invalid_format_raises():

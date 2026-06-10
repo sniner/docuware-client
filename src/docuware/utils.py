@@ -11,7 +11,11 @@ from typing import Any, Optional, Union
 
 from docuware import errors
 
-DATE_PATTERN = re.compile(r"/Date\((\d+)\)/")
+# .NET JSON date format: /Date(<msec>)/ with optional sign and informational
+# UTC offset, e.g. /Date(-86400000)/ or /Date(1700000000000+0200)/. The msec
+# value is always milliseconds since the Unix epoch in UTC; the offset only
+# describes the original display timezone and carries no extra information.
+DATE_PATTERN = re.compile(r"/Date\((-?\d+)(?:[+-]\d{4})?\)/")
 
 
 def quote_value(s: str, chars: frozenset) -> str:
@@ -63,7 +67,8 @@ def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
                 return datetime.fromtimestamp(msec / 1000)
             except (OverflowError, OSError, ValueError):
                 return None
-        # DocuWare sometimes returns negative timestamps (pre-1970 dates); treat as missing
+        # Zero or negative timestamps (1970-01-01 or earlier) are DocuWare's way
+        # of storing "no date" or corrupted pre-1970 entries; treat as missing.
         return None
     raise errors.DataError(f"Value must be formatted like '/Date(...)/', found '{value}'")
 
