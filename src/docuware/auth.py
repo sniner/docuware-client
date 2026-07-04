@@ -3,7 +3,6 @@ from __future__ import annotations
 import http.server
 import logging
 import secrets
-import socket
 import time
 import urllib.parse
 import warnings
@@ -438,27 +437,12 @@ class PkceAuthenticator(Authenticator):
         self._run_pkce_flow(conn)
         self._apply(conn)
 
-    def _pick_port(self) -> int:
-        if self.redirect_port != 0:
-            return self.redirect_port
-        with socket.socket() as sock:
-            sock.bind((self.redirect_host, 0))
-            return sock.getsockname()[1]
-
     def _run_pkce_flow(self, conn: types.ConnectionP) -> None:
         # late import to avoid circular dependency at module load time
         from docuware import oauth
 
         endpoints = oauth.discover_oauth_endpoints(conn.base_url, verify=self.verify)
         self.token_endpoint = endpoints.token_endpoint
-
-        port = self._pick_port()
-        redirect_uri = f"http://{self.redirect_host}:{port}{self.callback_path}"
-        verifier, challenge = oauth.generate_pkce()
-        state = secrets.token_urlsafe(32)
-        auth_url = oauth.build_authorization_url(
-            endpoints.authorization_endpoint, self.client_id, redirect_uri, challenge, state,
-        )
 
         callback_path_local = self.callback_path
 
@@ -486,8 +470,17 @@ class PkceAuthenticator(Authenticator):
             def log_message(self, format: str, *args: object) -> None:  # noqa: A002
                 pass
 
-        server = http.server.HTTPServer((self.redirect_host, port), _Handler)
+        # Bind directly (port 0 = ephemeral) and read the actual port from the
+        # bound socket — probing for a free port beforehand would be racy.
+        server = http.server.HTTPServer((self.redirect_host, self.redirect_port), _Handler)
         try:
+            port = server.server_address[1]
+            redirect_uri = f"http://{self.redirect_host}:{port}{self.callback_path}"
+            verifier, challenge = oauth.generate_pkce()
+            state = secrets.token_urlsafe(32)
+            auth_url = oauth.build_authorization_url(
+                endpoints.authorization_endpoint, self.client_id, redirect_uri, challenge, state,
+            )
             opener = self.on_browser_open or webbrowser.open
             opener(auth_url)
 
