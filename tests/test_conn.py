@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -384,6 +385,26 @@ def test_get_bytes_raises_on_content_length_mismatch():
 
     with pytest.raises(errors.ResourceError, match="content length"):
         _conn(handler).get_bytes("/file")
+
+
+def test_get_bytes_accepts_compressed_response():
+    # httpx decompresses the body, so its length differs from the
+    # Content-Length header (wire size); this must not raise.
+    body = gzip.compress(b"PDF data")
+
+    def handler(req):
+        return httpx.Response(
+            200,
+            content=body,
+            headers={
+                "Content-Type": "application/pdf",
+                "Content-Length": str(len(body)),
+                "Content-Encoding": "gzip",
+            },
+        )
+
+    data, _, _ = _conn(handler).get_bytes("/file")
+    assert data == b"PDF data"
 
 
 def test_get_bytes_raises_resource_not_found_on_404():

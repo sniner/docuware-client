@@ -296,7 +296,13 @@ class Connection(types.ConnectionP):
             content_disposition = parser.parse_content_disposition(
                 resp.headers.get("Content-Disposition", "")
             )
-            if content_length and len(resp.content) != int(content_length):
+            # Content-Length refers to the wire size; httpx decompresses
+            # encoded bodies, so the check only holds for identity encoding.
+            if (
+                content_length
+                and "Content-Encoding" not in resp.headers
+                and len(resp.content) != int(content_length)
+            ):
                 raise errors.ResourceError(
                     f"Unexpected content length: expected {content_length}, got {len(resp.content)}",
                     url=url,
