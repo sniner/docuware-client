@@ -5,6 +5,16 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-04
+
+### Breaking changes
+
+- **OAuth discovery failures** during password and client-credentials login now raise
+  ``OAuthDiscoveryError`` instead of ``ResourceError``, consistent with the PKCE flow.
+  Code that catches ``ResourceError`` (or ``ApiError``) specifically around ``connect()``
+  no longer sees these failures — catch ``OAuthDiscoveryError`` or the common base class
+  ``DocuwareClientException`` instead
+
 ### Added
 
 - **`docuware.Document`**, **`DocumentAttachment`**, **`StoreDialog`**, **`TaskListDialog`**
@@ -23,8 +33,6 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 - **`SearchDialog.search()`** validates the ``operation`` argument: strings are
   normalized case-insensitively ("or" → "Or"), invalid values raise
   ``SearchConditionError`` instead of being sent to the server
-- **OAuth discovery failures** during password and client-credentials login now raise
-  ``OAuthDiscoveryError`` (previously ``ResourceError``), consistent with the PKCE flow
 - **Auth errors** during login include the server's error message and accept any 2xx
   status (previously only 200)
 - **`dw-client login`** prompts for the password when ``--username`` is given without
