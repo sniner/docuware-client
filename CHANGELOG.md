@@ -5,6 +5,45 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- **`docuware.Document`**, **`DocumentAttachment`**, **`StoreDialog`**, **`TaskListDialog`**
+  and **`ResultListDialog`** are now importable from the top-level package, e.g. for type
+  annotations
+- **`sanitize_filename()`** utility: reduce a server-supplied filename to a safe basename
+
+### Changed
+
+- **Download filenames** from ``Content-Disposition`` are sanitized to a plain basename;
+  a malicious server can no longer steer downloads outside the target directory via path
+  separators or traversal sequences in the filename
+- **404 handling**: all HTTP verbs now raise ``ResourceNotFoundError`` for HTTP 404
+  (previously only ``get_bytes()``); it remains a subclass of ``ResourceError``, so
+  existing handlers keep working
+- **`SearchDialog.search()`** validates the ``operation`` argument: strings are
+  normalized case-insensitively ("or" → "Or"), invalid values raise
+  ``SearchConditionError`` instead of being sent to the server
+- **OAuth discovery failures** during password and client-credentials login now raise
+  ``OAuthDiscoveryError`` (previously ``ResourceError``), consistent with the PKCE flow
+- **Auth errors** during login include the server's error message and accept any 2xx
+  status (previously only 200)
+- **`dw-client login`** prompts for the password when ``--username`` is given without
+  ``--password`` (and no ``DW_PASSWORD`` env), so the password does not appear in the
+  process list or shell history
+- **`dw-client`** without a subcommand prints usage and exits with 2 instead of logging
+  in and doing nothing
+
+### Fixed
+
+- **`Connection.get_bytes()`** no longer raises a spurious content-length error when the
+  server delivers a compressed (e.g. gzip) response
+- **`Organization.info`** no longer raises ``KeyError`` when ``AdditionalInfo`` omits
+  ``CompanyNames`` or ``AddressLines``
+- **`ControlFile.add_field()`** now applies ``digits`` and date/datetime formatting also
+  when ``field_type`` is given explicitly (previously only with automatic type detection)
+- **PKCE login** binds the callback server directly instead of probing for a free port
+  first, closing a race where another process could grab the port in between
+
 ## [0.8.2] - 2026-06-10
 
 ### Added
