@@ -55,10 +55,10 @@ class IntFieldValue(FieldValue):
         super().__init__(config)
         try:
             self.value = None if self.value is None else int(self.value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exc:
             raise errors.DataError(
                 f"Value of field '{self.id}' is expected to be of type integer, found '{self.value}'"
-            )
+            ) from exc
 
     def __str__(self) -> str:
         return f"Integer '{self.name}' [{self.id}] = {self.value}"
@@ -69,10 +69,10 @@ class DecimalFieldValue(FieldValue):
         super().__init__(config)
         try:
             self.value = None if self.value is None else float(self.value)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exc:
             raise errors.DataError(
                 f"Value of field '{self.id}' is expected to be of type float, found '{self.value}'"
-            )
+            ) from exc
 
     def __str__(self) -> str:
         return f"Decimal '{self.name}' [{self.id}] = {self.value}"

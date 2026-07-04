@@ -1,48 +1,15 @@
 from __future__ import annotations
 
-import enum
 import logging
 from datetime import date
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from docuware import document, errors, fields, parser, structs, types, utils
 
+# Re-exported here for backwards compatibility; canonical home is docuware.types.
+from docuware.types import Operation, QuoteMode
+
 log = logging.getLogger(__name__)
-
-class Operation(enum.Enum):
-    """Logical operator that combines multiple search conditions."""
-
-    AND = "And"
-    """All conditions must match (default)."""
-
-    OR = "Or"
-    """At least one condition must match."""
-
-
-class QuoteMode(enum.Enum):
-    """Controls automatic escaping of DocuWare search metacharacters in field values.
-
-    When using the dict form of :meth:`SearchDialog.search`, field values may
-    contain characters that DocuWare interprets as query operators (e.g. ``(``,
-    ``)``, ``*``, ``?``).  ``QuoteMode`` selects which characters are
-    automatically escaped with a backslash before the query is sent to the API.
-
-    The escaping is **idempotent**: values that already contain backslash-escaped
-    sequences (e.g. ``\\(`` from an earlier workaround) are left unchanged.
-    """
-
-    NONE = "none"
-    """No automatic escaping."""
-
-    PARTIAL = "partial"
-    """Escape ``(`` and ``)`` only.  Wildcard characters ``*`` and ``?`` are
-    preserved so they can still be used for pattern matching.  This is the
-    default."""
-
-    ALL = "all"
-    """Escape ``(``, ``)``, ``*``, and ``?``.  Use this when wildcard
-    characters must be treated as literals."""
-
 
 _QUOTE_CHARS: Dict[QuoteMode, frozenset] = {
     QuoteMode.NONE: frozenset(),

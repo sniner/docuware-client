@@ -585,7 +585,8 @@ class TokenAuthenticator(Authenticator):
                           (web apps), empty for public/native clients.
         verify:           Whether to verify TLS certificates on the refresh request.
         on_token_refresh: Optional callback invoked after a successful refresh
-                          with the raw token response dict. Use it to persist tokens.
+                          with the credential bundle (see :meth:`to_bundle`).
+                          Use it to persist tokens.
     """
 
     METHOD = "token"

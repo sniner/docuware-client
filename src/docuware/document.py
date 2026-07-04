@@ -66,13 +66,8 @@ class Document:
     def delete(self) -> None:
         self._assert_alive()
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        try:
-            _ = self.client.conn.delete(self.endpoints["self"], headers=headers)
-        except Exception as exc:
-            log.debug("Unable to delete document %s: %s", self, exc)
-            raise
-        else:
-            self._deleted = True
+        self.client.conn.delete(self.endpoints["self"], headers=headers)
+        self._deleted = True
 
     def update(self, fields: Dict[str, Any]) -> Document:
         self._assert_alive()

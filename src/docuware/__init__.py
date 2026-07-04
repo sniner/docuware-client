@@ -7,7 +7,17 @@ from docuware.auth import (
     PkceAuthenticator,
     TokenAuthenticator,
 )
-from docuware.dialogs import InfoDialog, Operation, QuoteMode, ResultTree, SearchDialog
+from docuware.dialogs import (
+    InfoDialog,
+    Operation,
+    QuoteMode,
+    ResultListDialog,
+    ResultTree,
+    SearchDialog,
+    StoreDialog,
+    TaskListDialog,
+)
+from docuware.document import Document, DocumentAttachment
 from docuware.errors import (
     AccountError,
     ApiError,
@@ -59,6 +69,8 @@ __all__ = [
     "DataError",
     "DocuwareClientException",
     "DocuwareClient",
+    "Document",
+    "DocumentAttachment",
     "FileCabinet",
     "Group",
     "InfoDialog",
@@ -71,12 +83,15 @@ __all__ = [
     "PasswordGrantAuthenticator",
     "PkceAuthenticator",
     "QuoteMode",
+    "ResultListDialog",
     "ResultTree",
     "ResourceError",
     "ResourceNotFoundError",
     "SearchConditionError",
     "SearchDialog",
+    "StoreDialog",
     "TableZone",
+    "TaskListDialog",
     "TextLine",
     "TextPage",
     "TextShot",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 from typing import (
     Any,
     Dict,
@@ -19,6 +20,41 @@ from typing import (
 import httpx
 
 from docuware import cidict
+
+
+class Operation(enum.Enum):
+    """Logical operator that combines multiple search conditions."""
+
+    AND = "And"
+    """All conditions must match (default)."""
+
+    OR = "Or"
+    """At least one condition must match."""
+
+
+class QuoteMode(enum.Enum):
+    """Controls automatic escaping of DocuWare search metacharacters in field values.
+
+    When using the dict form of :meth:`SearchDialog.search`, field values may
+    contain characters that DocuWare interprets as query operators (e.g. ``(``,
+    ``)``, ``*``, ``?``).  ``QuoteMode`` selects which characters are
+    automatically escaped with a backslash before the query is sent to the API.
+
+    The escaping is **idempotent**: values that already contain backslash-escaped
+    sequences (e.g. ``\\(`` from an earlier workaround) are left unchanged.
+    """
+
+    NONE = "none"
+    """No automatic escaping."""
+
+    PARTIAL = "partial"
+    """Escape ``(`` and ``)`` only.  Wildcard characters ``*`` and ``?`` are
+    preserved so they can still be used for pattern matching.  This is the
+    default."""
+
+    ALL = "all"
+    """Escape ``(``, ``)``, ``*``, and ``?``.  Use this when wildcard
+    characters must be treated as literals."""
 
 
 class IdP(Protocol):
@@ -355,8 +391,9 @@ class SearchDialogP(DialogP, Protocol):
     def search(
         self,
         conditions: SearchConditionsT,
-        operation: Optional[str] = None,
+        operation: Optional[Union[str, Operation]] = None,
         order_by: Optional[OrderByT] = None,
+        quote: QuoteMode = QuoteMode.PARTIAL,
     ) -> SearchResultP: ...
 
 
