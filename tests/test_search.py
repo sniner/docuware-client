@@ -3,7 +3,7 @@ import unittest
 
 import httpx
 
-from docuware import DocuwareClient
+from docuware import DocuwareClient, Operation
 from docuware.errors import SearchConditionError
 
 
@@ -231,6 +231,28 @@ class TestSearchFlow(unittest.TestCase):
         dlg = self._dlg()
         with self.assertRaises(SearchConditionError):
             dlg.search("COMPANY=ACME", order_by=[("NoSuchField", "asc")])
+
+    def test_operation_defaults_to_and(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME"))
+        self.assertEqual(self.captured_bodies[-1].get("Operation"), "And")
+
+    def test_operation_enum(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME", operation=Operation.OR))
+        self.assertEqual(self.captured_bodies[-1].get("Operation"), "Or")
+
+    def test_operation_string_normalized(self):
+        dlg = self._dlg()
+        list(dlg.search("COMPANY=ACME", operation="or"))
+        self.assertEqual(self.captured_bodies[-1].get("Operation"), "Or")
+        list(dlg.search("COMPANY=ACME", operation="AND"))
+        self.assertEqual(self.captured_bodies[-1].get("Operation"), "And")
+
+    def test_operation_invalid_string_raises(self):
+        dlg = self._dlg()
+        with self.assertRaises(SearchConditionError):
+            dlg.search("COMPANY=ACME", operation="oder")
 
     def test_order_by_invalid_direction_raises(self):
         dlg = self._dlg()

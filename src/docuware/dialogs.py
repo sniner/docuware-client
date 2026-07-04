@@ -267,7 +267,17 @@ class SearchQuery:
         quote: QuoteMode = QuoteMode.PARTIAL,
     ) -> SearchResult:
         terms = self.cond_parser.parse(conditions, quote=quote)
-        op = operation.value if isinstance(operation, Operation) else (operation or Operation.AND.value)
+        if operation is None:
+            op = Operation.AND.value
+        elif isinstance(operation, Operation):
+            op = operation.value
+        else:
+            try:
+                op = Operation(operation.strip().capitalize()).value
+            except ValueError:
+                raise errors.SearchConditionError(
+                    f"Invalid operation: {operation!r} (allowed: and, or)"
+                ) from None
         data: Dict[str, Any] = {
             "Condition": [{"DBName": k, "Value": v} for k, v in terms],
             "Operation": op,
