@@ -79,25 +79,28 @@ class ControlFile:
         if field_type is None:
             if isinstance(value, datetime):
                 field_type = FieldType.DATETIME
-                field_value = value.strftime("%d.%m.%Y %H:%M")
-                if "culture" not in field_attrs:
-                    field_attrs["culture"] = "de-DE"
-                if "format" not in field_attrs:
-                    field_attrs["format"] = "dd.MM.yyyy H:mm"
             elif isinstance(value, date):
                 field_type = FieldType.DATE
-                field_value = value.strftime("%d.%m.%Y")
-                if "culture" not in field_attrs:
-                    field_attrs["culture"] = "de-DE"
-                if "format" not in field_attrs:
-                    field_attrs["format"] = "dd.MM.yyyy"
-            elif isinstance(value, float):
-                field_type = FieldType.NUMERIC
-                field_attrs["digits"] = digits or 2
-            elif isinstance(value, int):
+            elif isinstance(value, (float, int)):
                 field_type = FieldType.NUMERIC
             else:
                 field_type = FieldType.TEXT
+
+        # Value serialization, format defaults and digits apply regardless of
+        # whether the type was detected or given explicitly.
+        if field_type == FieldType.DATETIME and isinstance(value, datetime):
+            field_value = value.strftime("%d.%m.%Y %H:%M")
+            field_attrs.setdefault("culture", "de-DE")
+            field_attrs.setdefault("format", "dd.MM.yyyy H:mm")
+        elif field_type == FieldType.DATE and isinstance(value, date):
+            field_value = value.strftime("%d.%m.%Y")
+            field_attrs.setdefault("culture", "de-DE")
+            field_attrs.setdefault("format", "dd.MM.yyyy")
+        elif field_type == FieldType.NUMERIC:
+            if digits is not None:
+                field_attrs["digits"] = digits
+            elif isinstance(value, float):
+                field_attrs["digits"] = 2
 
         self.fields.append(
             FieldItem(

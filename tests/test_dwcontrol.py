@@ -127,6 +127,44 @@ def test_add_field_format_override():
     assert f.attrs["format"] == "MM/dd/yyyy"
 
 
+def test_add_field_explicit_numeric_respects_digits():
+    cf = ControlFile()
+    cf.add_field("amount", 1.5, field_type=FieldType.NUMERIC, digits=3)
+    f = cf.fields[0]
+    assert f.attrs["digits"] == 3
+
+
+def test_add_field_explicit_numeric_float_default_digits():
+    cf = ControlFile()
+    cf.add_field("amount", 1.5, field_type=FieldType.NUMERIC)
+    f = cf.fields[0]
+    assert f.attrs["digits"] == 2
+
+
+def test_add_field_explicit_date_formats_value():
+    cf = ControlFile()
+    cf.add_field("d", date(2024, 1, 15), field_type=FieldType.DATE)
+    f = cf.fields[0]
+    assert f.value == "15.01.2024"
+    assert f.attrs["culture"] == "de-DE"
+    assert f.attrs["format"] == "dd.MM.yyyy"
+
+
+def test_add_field_explicit_datetime_formats_value():
+    cf = ControlFile()
+    cf.add_field("d", datetime(2024, 1, 15, 9, 30), field_type=FieldType.DATETIME)
+    f = cf.fields[0]
+    assert f.value == "15.01.2024 09:30"
+
+
+def test_add_field_explicit_type_with_string_value_left_untouched():
+    cf = ControlFile()
+    cf.add_field("d", "15.01.2024", field_type=FieldType.DATE)
+    f = cf.fields[0]
+    assert f.value == "15.01.2024"
+    assert "culture" not in f.attrs
+
+
 # --- Fluent interface ---
 
 def test_add_field_returns_self():
