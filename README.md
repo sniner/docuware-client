@@ -51,7 +51,7 @@ dw = docuware.connect(credentials_file="/path/to/.credentials")
 ```
 
 Credentials are saved automatically to the file specified by `credentials_file`
-after a successfull login.
+after a successful login.
 
 ### PKCE (native/desktop, recommended for interactive use)
 
@@ -91,20 +91,28 @@ complete runnable scripts.
 
 If your application handles the OAuth2 login itself — for example via the
 Authorization Code + PKCE flow — you can connect with externally obtained
-tokens using `connect_with_tokens()`:
+tokens using a `TokenAuthenticator`:
 
 ```python
 import docuware
 
-dw = docuware.connect_with_tokens(
+dw = docuware.connect(
     url="https://acme.docuware.cloud/DocuWare/Platform",
-    access_token="...",
-    refresh_token="...",
-    token_endpoint="https://acme.docuware.cloud/DocuWare/Identity/connect/token",
-    client_id="your-client-id",
-    on_token_refresh=lambda tokens: save_tokens(tokens),  # optional: persist rotated tokens
+    authenticator=docuware.TokenAuthenticator(
+        access_token="...",
+        refresh_token="...",
+        token_endpoint="https://acme.docuware.cloud/DocuWare/Identity/connect/token",
+        client_id="your-client-id",
+    ),
+    credential_store=docuware.JsonFileCredentialStore("~/.config/myapp/.credentials"),
 )
 ```
+
+DocuWare rotates refresh tokens; with a `credential_store` the rotated tokens
+are persisted automatically on every refresh. Alternatively, set the
+authenticator's `on_token_refresh` callback to persist the credential bundle
+yourself. The older `connect_with_tokens()` entry point still works but is
+deprecated since 0.8.0 and emits a `DeprecationWarning`.
 
 The `docuware.oauth` module provides two helpers for the PKCE flow itself:
 `discover_oauth_endpoints()` resolves the authorization and token endpoints
@@ -389,8 +397,13 @@ about the archive and searching and downloading documents or attachments.
 First you need to log in:
 
 ```console
-$ dw-client login --url http://localhost/ --username "Doe, John" --password FooBar --organization "Doe Inc."
+$ dw-client login --url http://localhost/ --username "Doe, John" --organization "Doe Inc."
+Password:
 ```
+
+When `--password` is omitted, you are prompted interactively — this keeps the
+password out of the process list and your shell history. Passing
+`--password` on the command line still works (e.g. for scripting).
 
 The credentials are stored in `$XDG_CONFIG_HOME/docuware-client/.credentials`
 (or `$HOME/.docuware-client.cred` if `XDG_CONFIG_HOME` is not set).
@@ -420,7 +433,7 @@ $ dw-client search --file-cabinet Archive Customer=Foo\* --download document --a
 
 > Note: `--annotations` forces the download as a PDF with annotations embedded. Without this flag, the document is downloaded in its original format without annotations.
 
-Downloading a specific document by ID (new in v0.6.1):
+Downloading a specific document by ID:
 
 ```console
 $ dw-client get --file-cabinet Archive --id 123456
