@@ -357,6 +357,23 @@ def test_get_bytes_uses_unknown_bin_when_no_filename():
     assert filename == "unknown.bin"
 
 
+def test_get_bytes_sanitizes_server_supplied_filename():
+    # A hostile server must not be able to steer the filename outside the
+    # target directory via path separators in Content-Disposition.
+    def handler(req):
+        return httpx.Response(
+            200,
+            content=b"data",
+            headers={
+                "Content-Type": "application/octet-stream",
+                "Content-Disposition": 'attachment; filename="../../evil.sh"',
+            },
+        )
+
+    _, _, filename = _conn(handler).get_bytes("/file")
+    assert filename == "evil.sh"
+
+
 def test_get_bytes_raises_on_content_length_mismatch():
     def handler(req):
         return httpx.Response(

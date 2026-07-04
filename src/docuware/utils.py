@@ -112,6 +112,22 @@ def date_to_string(value: date) -> str:
     return datetime_to_string(datetime(value.year, value.month, value.day))
 
 
+def sanitize_filename(name: Optional[str], default: str = "unknown.bin") -> str:
+    """Reduce a possibly hostile filename to a safe basename.
+
+    Filenames received from a server (e.g. via Content-Disposition) may
+    contain path separators or traversal sequences. Only the final path
+    component is kept, so the result can safely be joined with a target
+    directory. Windows separators and drive prefixes are handled as well.
+    """
+    if not name:
+        return default
+    base = pathlib.PureWindowsPath(name).name
+    if base in ("", ".", ".."):
+        return default
+    return base
+
+
 UNIQUE_FILENAME_LIMIT: int = 1000
 
 

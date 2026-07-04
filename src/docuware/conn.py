@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import httpx
 
-from docuware import cijson, errors, parser, types
+from docuware import cijson, errors, parser, types, utils
 from docuware.const import ACCEPT_JSON, ACCEPT_TEXT, BASE_HEADERS
 
 log = logging.getLogger(__name__)
@@ -305,7 +305,7 @@ class Connection(types.ConnectionP):
             return (
                 resp.content,
                 content_type,
-                content_disposition.get("filename") or "unknown.bin",
+                utils.sanitize_filename(content_disposition.get("filename")),
             )
         msg = _server_message(resp)
         error_cls = (

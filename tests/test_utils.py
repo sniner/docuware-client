@@ -17,6 +17,7 @@ from docuware.utils import (
     quote_value,
     random_password,
     safe_str,
+    sanitize_filename,
     unique_filename,
     write_binary_file,
 )
@@ -173,6 +174,35 @@ def test_datetime_to_string_format():
     result = datetime_to_string(dt)
     assert result.startswith("/Date(")
     assert result.endswith(")/")
+
+
+# --- sanitize_filename() ---
+
+
+def test_sanitize_filename_plain_name_unchanged():
+    assert sanitize_filename("report.pdf") == "report.pdf"
+
+
+def test_sanitize_filename_strips_posix_traversal():
+    assert sanitize_filename("../../etc/passwd") == "passwd"
+
+
+def test_sanitize_filename_strips_absolute_path():
+    assert sanitize_filename("/etc/passwd") == "passwd"
+
+
+def test_sanitize_filename_strips_windows_separators_and_drive():
+    assert sanitize_filename("..\\..\\win.ini") == "win.ini"
+    assert sanitize_filename("C:\\evil.exe") == "evil.exe"
+    assert sanitize_filename("C:evil.exe") == "evil.exe"
+
+
+def test_sanitize_filename_empty_and_dot_names_fall_back_to_default():
+    assert sanitize_filename(None) == "unknown.bin"
+    assert sanitize_filename("") == "unknown.bin"
+    assert sanitize_filename(".") == "unknown.bin"
+    assert sanitize_filename("..") == "unknown.bin"
+    assert sanitize_filename("/", default="fallback") == "fallback"
 
 
 # --- unique_filename() ---
