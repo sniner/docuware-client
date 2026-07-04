@@ -155,16 +155,23 @@ class Authenticator(ABC, types.AuthenticatorP):
 
         Shared by the password and client_credentials grants: resolves the
         Identity Service via KBA-37505 (IdentityServiceInfo → OIDC discovery
-        → token endpoint), posts the grant, and extracts the access token.
-        A 400 response is translated to ``invalid_credentials_msg``.
+        → token endpoint) through :func:`docuware.oauth._discover_oidc`,
+        posts the grant, and extracts the access token. Discovery failures
+        raise :class:`errors.OAuthDiscoveryError`; a 400 response to the
+        grant is translated to ``invalid_credentials_msg``.
         """
+        # late import to avoid circular dependency at module load time
+        from docuware import oauth
+
         log.debug("Requesting access token (%s grant)", data.get("grant_type"))
-        res = self._get(conn, "/DocuWare/Platform/Home/IdentityServiceInfo")
-        path = (
-            f"{res.get('IdentityServiceUrl', '').rstrip('/')}/.well-known/openid-configuration"
+        _, oidc = oauth._discover_oidc(
+            conn.base_url, fetch_json=lambda url: self._get(conn, url)
         )
-        res = self._get(conn, path)
-        path = res.get("token_endpoint") or "/DocuWare/Identity/connect/token"
+        path = oidc.get("token_endpoint")
+        if not path:
+            raise errors.OAuthDiscoveryError(
+                "token_endpoint missing in OpenID Connect discovery response."
+            )
         try:
             result = self._post(conn, path, data=data)
         except errors.ResourceError as exc:

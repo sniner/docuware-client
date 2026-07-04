@@ -536,7 +536,7 @@ def main() -> None:
             func = COMMANDS.get(args.subcommand)
             if func:
                 code = func(dw, args)
-    except (docuware.AccountError, docuware.ResourceError) as exc:
+    except docuware.DocuwareClientException as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         code = 1
     except BrokenPipeError:

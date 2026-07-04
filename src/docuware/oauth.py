@@ -24,7 +24,7 @@ import base64
 import hashlib
 import secrets
 import urllib.parse
-from typing import Any, Dict, NamedTuple
+from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
 
 import httpx
 
@@ -138,10 +138,69 @@ def normalize_docuware_url(value: str) -> str:
     return v.rstrip("/") + "/DocuWare/Platform"
 
 
+def _discover_oidc(
+    docuware_url: str,
+    *,
+    verify: bool = True,
+    fetch_json: Optional[Callable[[str], Any]] = None,
+) -> Tuple[str, Any]:
+    """Run the two-step discovery chain and return ``(identity_url, oidc_config)``.
+
+    ``fetch_json`` GETs a URL and returns the parsed JSON body; the default is
+    a plain ``httpx.get`` honouring ``verify``. Callers can inject a
+    session-bound getter to reuse an existing connection's TLS settings.
+    All failures are translated to :class:`errors.OAuthDiscoveryError`.
+    """
+    if fetch_json is None:
+
+        def _default_fetch(url: str) -> Any:
+            resp = httpx.get(
+                url,
+                headers={"Accept": "application/json"},
+                timeout=10,
+                follow_redirects=True,
+                verify=verify,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+        fetch_json = _default_fetch
+
+    platform_url = normalize_docuware_url(docuware_url)
+    info_url = platform_url.rstrip("/") + "/Home/IdentityServiceInfo"
+    try:
+        info = fetch_json(info_url)
+    except Exception as exc:
+        raise errors.OAuthDiscoveryError(
+            f"DocuWare not reachable ({info_url}): {exc}"
+        ) from exc
+
+    try:
+        identity_url = (info.get("IdentityServiceUrl") or "").strip()
+    except Exception as exc:
+        raise errors.OAuthDiscoveryError(
+            f"Could not parse IdentityServiceInfo: {exc}"
+        ) from exc
+
+    if not identity_url:
+        raise errors.OAuthDiscoveryError("IdentityServiceUrl missing in DocuWare response.")
+
+    discovery_url = identity_url.rstrip("/") + "/.well-known/openid-configuration"
+    try:
+        oidc = fetch_json(discovery_url)
+    except Exception as exc:
+        raise errors.OAuthDiscoveryError(
+            f"OpenID Connect discovery failed ({discovery_url}): {exc}"
+        ) from exc
+
+    return identity_url, oidc
+
+
 def discover_oauth_endpoints(
     docuware_url: str,
     *,
     verify: bool = True,
+    fetch_json: Optional[Callable[[str], Any]] = None,
 ) -> OAuthEndpoints:
     """Discover the OAuth2 authorization and token endpoints for a DocuWare instance.
 
@@ -164,6 +223,10 @@ def discover_oauth_endpoints(
                       - Short tenant name: ``acme`` (expands to ``acme.docuware.cloud``)
         verify:       Whether to verify TLS certificates (default ``True``).
                       Set to ``False`` for on-prem instances with self-signed certs.
+        fetch_json:   Optional callable that GETs a URL and returns the parsed
+                      JSON body.  Defaults to a plain ``httpx.get`` honouring
+                      ``verify``; inject a session-bound getter to reuse an
+                      existing connection.
 
     Returns:
         An :class:`OAuthEndpoints` named tuple with ``authorization_endpoint``,
@@ -174,42 +237,7 @@ def discover_oauth_endpoints(
             fields are absent.  Subclasses RuntimeError for backwards
             compatibility.
     """
-    platform_url = normalize_docuware_url(docuware_url)
-    info_url = platform_url.rstrip("/") + "/Home/IdentityServiceInfo"
-    try:
-        resp = httpx.get(
-            info_url,
-            headers={"Accept": "application/json"},
-            timeout=10,
-            follow_redirects=True,
-            verify=verify,
-        )
-        resp.raise_for_status()
-    except Exception as exc:
-        raise errors.OAuthDiscoveryError(
-            f"DocuWare not reachable ({info_url}): {exc}"
-        ) from exc
-
-    try:
-        info = resp.json()
-        identity_url = (info.get("IdentityServiceUrl") or "").strip()
-    except Exception as exc:
-        raise errors.OAuthDiscoveryError(
-            f"Could not parse IdentityServiceInfo: {exc}"
-        ) from exc
-
-    if not identity_url:
-        raise errors.OAuthDiscoveryError("IdentityServiceUrl missing in DocuWare response.")
-
-    discovery_url = identity_url.rstrip("/") + "/.well-known/openid-configuration"
-    try:
-        resp2 = httpx.get(discovery_url, timeout=10, verify=verify)
-        resp2.raise_for_status()
-        oidc = resp2.json()
-    except Exception as exc:
-        raise errors.OAuthDiscoveryError(
-            f"OpenID Connect discovery failed ({discovery_url}): {exc}"
-        ) from exc
+    identity_url, oidc = _discover_oidc(docuware_url, verify=verify, fetch_json=fetch_json)
 
     auth_ep = oidc.get("authorization_endpoint", "")
     token_ep = oidc.get("token_endpoint", "")
