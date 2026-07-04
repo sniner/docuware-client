@@ -31,7 +31,9 @@ def parse_arguments() -> argparse.Namespace:
         help="Do not verify certificate integrity",
     )
 
-    subparsers = parser.add_subparsers(dest="subcommand")
+    # required=True: without a subcommand argparse prints usage and exits(2)
+    # instead of silently connecting and doing nothing.
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
     login_parser = subparsers.add_parser("login", description="Connect to DocuWare server")
     login_parser.add_argument(
