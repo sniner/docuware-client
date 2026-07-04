@@ -155,6 +155,21 @@ def test_organization_info_falls_back_to_org_name_when_all_empty():
     assert org.info["CompanyNames"] == ["Test Org"]
 
 
+def test_organization_info_handles_missing_fields():
+    # AdditionalInfo may omit CompanyNames/AddressLines or be absent entirely
+    info_resp = {"Name": "Test Org", "Id": "org1", "Links": [], "AdditionalInfo": {}}
+    org, _ = _make_org(return_value=info_resp)
+    assert org.info["CompanyNames"] == ["Test Org"]
+    assert org.info["AddressLines"] == []
+
+
+def test_organization_info_handles_absent_additional_info():
+    info_resp = {"Name": "Test Org", "Id": "org1", "Links": []}
+    org, _ = _make_org(return_value=info_resp)
+    assert org.info["CompanyNames"] == ["Test Org"]
+    assert org.info["AddressLines"] == []
+
+
 def test_organization_info_cached():
     info_resp = {
         "Name": "Test Org", "Id": "org1", "Links": [],

@@ -94,11 +94,13 @@ class Organization:
             result = self.client.conn.get_json(self.endpoints["self"])
             self.endpoints = structs.Endpoints(result)
             self._info = cidict.CaseInsensitiveDict(result.get("AdditionalInfo", {}))
-            # Remove empty lines
+            # Remove empty lines; both fields may be absent entirely
             self._info["CompanyNames"] = [
-                line for line in self._info["CompanyNames"] if line
+                line for line in self._info.get("CompanyNames") or [] if line
             ] or [self.name]
-            self._info["AddressLines"] = [line for line in self._info["AddressLines"] if line]
+            self._info["AddressLines"] = [
+                line for line in self._info.get("AddressLines") or [] if line
+            ]
         return self._info
 
     @property
