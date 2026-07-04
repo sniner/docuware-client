@@ -14,6 +14,7 @@ from typing import Any, Callable, ClassVar, Dict, Optional, Union
 import httpx
 
 from docuware import cijson, errors, persistence, types
+from docuware.conn import _server_message
 from docuware.const import ACCEPT_JSON, BASE_HEADERS
 
 log = logging.getLogger(__name__)
@@ -114,10 +115,14 @@ class Authenticator(ABC, types.AuthenticatorP):
     def _get(self, conn: types.ConnectionP, path: str) -> Dict:
         url = conn.make_url(path)
         resp = conn.session.get(url, headers={**BASE_HEADERS, **ACCEPT_JSON})
-        if resp.status_code == 200:
+        if resp.is_success:
             return cijson.loads(resp.text)
+        msg = _server_message(resp)
         raise errors.ResourceError(
-            "Failed to get resource", url=url, status_code=resp.status_code
+            f"GET {resp.status_code}" + (f": {msg}" if msg else ""),
+            url=url,
+            status_code=resp.status_code,
+            server_message=msg,
         )
 
     def _post(
@@ -130,10 +135,14 @@ class Authenticator(ABC, types.AuthenticatorP):
         url = conn.make_url(path)
         headers = {**BASE_HEADERS, **(headers or {}), **ACCEPT_JSON}
         resp = conn.session.post(url, headers=headers, data=data)
-        if resp.status_code == 200:
+        if resp.is_success:
             return cijson.loads(resp.text)
+        msg = _server_message(resp)
         raise errors.ResourceError(
-            "Failed to post to resource", url=url, status_code=resp.status_code
+            f"POST {resp.status_code}" + (f": {msg}" if msg else ""),
+            url=url,
+            status_code=resp.status_code,
+            server_message=msg,
         )
 
     def _request_token(
