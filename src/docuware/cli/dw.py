@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import getpass
+import os
 import pathlib
 import sys
 from typing import Any, Dict, List, Optional
@@ -42,7 +44,11 @@ def parse_arguments() -> argparse.Namespace:
         help="URL of DocuWare server",
     )
     login_parser.add_argument("--username", type=str, help="Username")
-    login_parser.add_argument("--password", type=str, help="Password")
+    login_parser.add_argument(
+        "--password",
+        type=str,
+        help="Password (omit to be prompted; avoids exposing it in the process list)",
+    )
     login_parser.add_argument("--organization", type=str, default=None, help="Organization")
 
     list_parser = subparsers.add_parser("list", description="List all assets")
@@ -503,10 +509,18 @@ def main() -> None:
         cred_file.parent.mkdir(exist_ok=True, parents=True)
 
         if args.subcommand == "login":
+            password = args.password
+            if (
+                args.username
+                and not password
+                and not os.environ.get("DW_PASSWORD")
+                and sys.stdin.isatty()
+            ):
+                password = getpass.getpass("Password: ")
             docuware.connect(
                 url=args.url,
                 username=args.username,
-                password=args.password,
+                password=password,
                 organization=args.organization,
                 verify_certificate=verify,
                 credentials_file=cred_file,
