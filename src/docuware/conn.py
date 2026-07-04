@@ -48,6 +48,22 @@ def _server_message(resp: httpx.Response) -> Optional[str]:
         return None
 
 
+def _raise_for_status(resp: httpx.Response, url: str, verb: str) -> None:
+    """Raise for a non-2xx response: ResourceNotFoundError on 404, ResourceError otherwise."""
+    if resp.is_success:
+        return
+    msg = _server_message(resp)
+    error_cls = (
+        errors.ResourceNotFoundError if resp.status_code == 404 else errors.ResourceError
+    )
+    raise error_cls(
+        f"{verb} {resp.status_code}" + (f": {msg}" if msg else ""),
+        url=url,
+        status_code=resp.status_code,
+        server_message=msg,
+    )
+
+
 class Connection(types.ConnectionP):
     def __init__(
         self,
@@ -141,15 +157,8 @@ class Connection(types.ConnectionP):
             files=files,
             params=params,
         )
-        if resp.is_success:
-            return resp
-        msg = _server_message(resp)
-        raise errors.ResourceError(
-            f"POST {resp.status_code}" + (f": {msg}" if msg else ""),
-            url=url,
-            status_code=resp.status_code,
-            server_message=msg,
-        )
+        _raise_for_status(resp, url, "POST")
+        return resp
 
     def post_json(
         self,
@@ -189,15 +198,8 @@ class Connection(types.ConnectionP):
             data=data,
             params=params,
         )
-        if resp.is_success:
-            return resp
-        msg = _server_message(resp)
-        raise errors.ResourceError(
-            f"PUT {resp.status_code}" + (f": {msg}" if msg else ""),
-            url=url,
-            status_code=resp.status_code,
-            server_message=msg,
-        )
+        _raise_for_status(resp, url, "PUT")
+        return resp
 
     def put_json(
         self,
@@ -235,15 +237,8 @@ class Connection(types.ConnectionP):
             headers=headers,
             params=params,
         )
-        if resp.is_success:
-            return resp
-        msg = _server_message(resp)
-        raise errors.ResourceError(
-            f"GET {resp.status_code}" + (f": {msg}" if msg else ""),
-            url=url,
-            status_code=resp.status_code,
-            server_message=msg,
-        )
+        _raise_for_status(resp, url, "GET")
+        return resp
 
     def get_json(self, path: str, headers: Optional[Dict[str, str]] = None) -> Any:
         headers = {**headers, **ACCEPT_JSON} if headers else ACCEPT_JSON
@@ -267,15 +262,8 @@ class Connection(types.ConnectionP):
             headers=headers,
             params=params,
         )
-        if resp.is_success:
-            return resp
-        msg = _server_message(resp)
-        raise errors.ResourceError(
-            f"DELETE {resp.status_code}" + (f": {msg}" if msg else ""),
-            url=url,
-            status_code=resp.status_code,
-            server_message=msg,
-        )
+        _raise_for_status(resp, url, "DELETE")
+        return resp
 
     def get_bytes(
         self,
@@ -290,36 +278,26 @@ class Connection(types.ConnectionP):
             headers={"Accept": mime_type if mime_type else "*/*"},
             params=params,
         )
-        if resp.is_success:
-            content_type = resp.headers.get("Content-Type", "application/octet-stream")
-            content_length = resp.headers.get("Content-Length")
-            content_disposition = parser.parse_content_disposition(
-                resp.headers.get("Content-Disposition", "")
-            )
-            # Content-Length refers to the wire size; httpx decompresses
-            # encoded bodies, so the check only holds for identity encoding.
-            if (
-                content_length
-                and "Content-Encoding" not in resp.headers
-                and len(resp.content) != int(content_length)
-            ):
-                raise errors.ResourceError(
-                    f"Unexpected content length: expected {content_length}, got {len(resp.content)}",
-                    url=url,
-                    status_code=resp.status_code,
-                )
-            return (
-                resp.content,
-                content_type,
-                utils.sanitize_filename(content_disposition.get("filename")),
-            )
-        msg = _server_message(resp)
-        error_cls = (
-            errors.ResourceNotFoundError if resp.status_code == 404 else errors.ResourceError
+        _raise_for_status(resp, url, "GET")
+        content_type = resp.headers.get("Content-Type", "application/octet-stream")
+        content_length = resp.headers.get("Content-Length")
+        content_disposition = parser.parse_content_disposition(
+            resp.headers.get("Content-Disposition", "")
         )
-        raise error_cls(
-            f"Download failed {resp.status_code}" + (f": {msg}" if msg else ""),
-            url=url,
-            status_code=resp.status_code,
-            server_message=msg,
+        # Content-Length refers to the wire size; httpx decompresses
+        # encoded bodies, so the check only holds for identity encoding.
+        if (
+            content_length
+            and "Content-Encoding" not in resp.headers
+            and len(resp.content) != int(content_length)
+        ):
+            raise errors.ResourceError(
+                f"Unexpected content length: expected {content_length}, got {len(resp.content)}",
+                url=url,
+                status_code=resp.status_code,
+            )
+        return (
+            resp.content,
+            content_type,
+            utils.sanitize_filename(content_disposition.get("filename")),
         )

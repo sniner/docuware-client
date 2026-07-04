@@ -266,6 +266,13 @@ def test_get_raises_resource_error_on_non_200(status):
     assert exc_info.value.status_code == status
 
 
+@pytest.mark.parametrize("verb", ["get", "post", "put", "delete"])
+def test_all_verbs_raise_resource_not_found_on_404(verb):
+    conn = _conn(lambda req: httpx.Response(404, json={"Message": "gone"}))
+    with pytest.raises(errors.ResourceNotFoundError):
+        getattr(conn, verb)("/path")
+
+
 def test_get_includes_server_message_in_error():
     conn = _conn(lambda req: httpx.Response(404, json={"Message": "Doc not found"}))
     with pytest.raises(errors.ResourceError, match="Doc not found"):
