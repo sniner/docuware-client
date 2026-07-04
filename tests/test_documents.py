@@ -318,7 +318,7 @@ class TestDocumentAdditional(unittest.TestCase):
             "Links": [],
         }, fc)
         f = doc.field("COMPANY")
-        self.assertIsNotNone(f)
+        assert f is not None
         self.assertEqual(f.id, "COMPANY")
 
     def test_field_not_found_returns_default(self):

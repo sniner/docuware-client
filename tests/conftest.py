@@ -1,6 +1,8 @@
 """Shared test helpers for docuware-client tests."""
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 
@@ -20,20 +22,20 @@ _AUTH_ROUTES: dict = {
 }
 
 
-def make_handler(*extras):
+def make_handler(*extras: Any):
     """Build an httpx.MockTransport handler with standard auth routes.
 
     extras: dicts mapping path -> json_response (or httpx.Response),
             or callables(request) -> Response | None.
     """
-    def handler(request: httpx.Request):
+    def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path in _AUTH_ROUTES:
             return httpx.Response(200, json=_AUTH_ROUTES[path])
         for extra in extras:
             if callable(extra):
                 resp = extra(request)
-                if resp is not None:
+                if isinstance(resp, httpx.Response):
                     return resp
             elif isinstance(extra, dict) and path in extra:
                 data = extra[path]

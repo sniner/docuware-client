@@ -1,4 +1,5 @@
 import unittest
+from typing import cast
 from unittest.mock import MagicMock
 
 import httpx
@@ -108,7 +109,7 @@ class TestBasketSeparation(unittest.TestCase):
         })
         _ = org.file_cabinets
         _ = org.baskets
-        org.client.conn.get_json.assert_called_once()
+        cast(MagicMock, org.client.conn.get_json).assert_called_once()
 
 
 class TestGetDocument(unittest.TestCase):

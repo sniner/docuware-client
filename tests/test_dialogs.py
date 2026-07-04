@@ -79,7 +79,7 @@ class TestIsDefaultFallback(unittest.TestCase):
             ]
         })
         result = fc.search_dialog()
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.id, "SearchDefault")
 
     def test_first_dialog_used_when_no_default(self):
@@ -90,7 +90,7 @@ class TestIsDefaultFallback(unittest.TestCase):
             ]
         })
         result = fc.search_dialog()
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.id, "SearchA")
 
     def test_returns_none_when_no_search_dialog(self):
@@ -209,8 +209,9 @@ class TestAssociatedDialog(unittest.TestCase):
             },
         ])
         search_dlg = fc.dialog("SearchA")
+        assert isinstance(search_dlg, Dialog)
         associated = search_dlg.associated_dialog
-        self.assertIsNotNone(associated)
+        assert associated is not None
         self.assertIsInstance(associated, ResultListDialog)
         self.assertEqual(associated.id, "ResultsB")
 

@@ -257,10 +257,10 @@ class TestUsers(unittest.TestCase):
         ])
         mock_conn.post_json.return_value = {}
         user_list = users.Users(mock_org)
-        result = user_list.add(new_user, password="secret123")
+        # Result may be None if DBName doesn't match (acceptable);
+        # just verify the request was made and no exception was raised.
+        user_list.add(new_user, password="secret123")
         mock_conn.post_json.assert_called_once()
-        # Result may be None if DBName doesn't match (acceptable)
-        # Just verify no exception was raised
 
     def test_users_add_wraps_resource_error(self):
         new_user = users.User(first_name="New", last_name="User")
@@ -378,7 +378,7 @@ class TestGroups(unittest.TestCase):
         })
         group_list = users.Groups(mock_org)
         g = group_list.get("Admins")
-        self.assertIsNotNone(g)
+        assert g is not None
         self.assertEqual(g.name, "Admins")
 
     def test_groups_get_not_found_returns_default(self):

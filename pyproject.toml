@@ -52,6 +52,17 @@ typeCheckingMode = "standard"
 useLibraryCodeForTypes = true
 venvPath = "."
 venv = ".venv"
+# Keep untracked scratch files and build output out of the analysis so the
+# checker output stays usable as a regression signal.
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "x*.py",
+    "probe_*.py",
+    "dist",
+    "prod",
+]
 
 [tool.ruff]
 line-length = 96

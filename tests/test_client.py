@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import stat
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -9,9 +10,23 @@ import pytest
 
 from docuware import CredentialStore, DocuwareClient, errors
 from docuware.client import connect, connect_with_tokens
-from docuware.auth import TokenAuthenticator
+from docuware.auth import BearerAuth, TokenAuthenticator
 
 BASE_URL = "https://example.com"
+
+
+def _bearer(client: DocuwareClient) -> BearerAuth:
+    """Narrow the session auth to BearerAuth for typed attribute access."""
+    auth = client.conn.session.auth
+    assert isinstance(auth, BearerAuth)
+    return auth
+
+
+def _token_auth(client: DocuwareClient) -> TokenAuthenticator:
+    """Narrow the connection's authenticator to TokenAuthenticator."""
+    authenticator = client.conn.authenticator
+    assert isinstance(authenticator, TokenAuthenticator)
+    return authenticator
 
 # connect_with_tokens is deprecated but still under test until removal
 _DEPRECATION_OK = pytest.mark.filterwarnings(
@@ -255,8 +270,7 @@ def test_connect_with_tokens_sets_bearer_auth():
             token_endpoint="https://login.example.com/token",
             client_id="test-client",
         )
-    assert client.conn.session.auth is not None
-    assert client.conn.session.auth.token == "at_123"
+    assert _bearer(client).token == "at_123"
 
 
 @_DEPRECATION_OK
@@ -271,7 +285,7 @@ def test_connect_with_tokens_passes_callback():
             client_id="test-client",
             on_token_refresh=callback,
         )
-    assert client.conn.authenticator.on_token_refresh is callback
+    assert _token_auth(client).on_token_refresh is callback
 
 
 # --- connect_with_tokens() with CredentialStore ---
@@ -280,16 +294,16 @@ def test_connect_with_tokens_passes_callback():
 class _MemoryCredentialStore(CredentialStore):
     """In-memory CredentialStore for tests; records every save() call."""
 
-    def __init__(self, initial=None):
+    def __init__(self, initial: Optional[Dict[str, Any]] = None):
         self._bundle = initial
         self.saves: list = []
 
-    def load(self):
+    def load(self) -> Optional[Dict[str, Any]]:
         return self._bundle
 
-    def save(self, tokens):
-        self._bundle = dict(tokens)
-        self.saves.append(dict(tokens))
+    def save(self, bundle: Dict[str, Any]) -> None:
+        self._bundle = dict(bundle)
+        self.saves.append(dict(bundle))
 
 
 @_DEPRECATION_OK
@@ -302,11 +316,11 @@ def test_connect_with_tokens_uses_store_tokens():
             client_id="test-client",
             token_store=store,
         )
-    assert client.conn.session.auth.token == "from_store"
-    assert client.conn.authenticator.refresh_token == "rt_store"
+    assert _bearer(client).token == "from_store"
+    assert _token_auth(client).refresh_token == "rt_store"
     # on_token_refresh is auto-wired to a closure that calls store.save with
     # the full bundle (including the url field added by connect()).
-    assert callable(client.conn.authenticator.on_token_refresh)
+    assert callable(_token_auth(client).on_token_refresh)
     # The minimal stored bundle gets enriched on first use — connect() writes
     # the full {method, client_id, access_token, refresh_token, token_endpoint, url}.
     assert len(store.saves) == 1
@@ -405,11 +419,11 @@ def test_connect_with_tokens_refresh_triggers_store_save():
     }
     refresh_response.raise_for_status.return_value = None
     with patch("docuware.auth.httpx.post", return_value=refresh_response) as mock_post:
-        client.conn.authenticator.authenticate(client.conn)
+        _token_auth(client).authenticate(client.conn)
 
     mock_post.assert_called_once()
-    assert client.conn.authenticator.access_token == "new_at"
-    assert client.conn.authenticator.refresh_token == "new_rt"
+    assert _token_auth(client).access_token == "new_at"
+    assert _token_auth(client).refresh_token == "new_rt"
     # Second save: refresh callback persisted the rotated tokens via the store.
     assert len(store.saves) == 2
     assert store.saves[-1]["access_token"] == "new_at"

@@ -467,7 +467,7 @@ def test_token_auth_login_sets_bearer():
         client_id="test-client",
     )
     auth.login(c)
-    assert c.session.auth is not None
+    assert isinstance(c.session.auth, BearerAuth)
     assert c.session.auth.token == "at_123"
 
 
@@ -504,6 +504,7 @@ def test_token_auth_authenticate_refreshes_token(mock_post):
     auth.authenticate(c)
     assert auth.access_token == "at_refreshed"
     assert auth.refresh_token == "rt_refreshed"
+    assert isinstance(c.session.auth, BearerAuth)
     assert c.session.auth.token == "at_refreshed"
     mock_post.assert_called_once_with(
         f"{BASE}/token",

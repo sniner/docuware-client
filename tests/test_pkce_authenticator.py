@@ -37,6 +37,7 @@ def test_login_with_stored_tokens_applies_bearer_no_flow():
         auth.login(conn)
     flow.assert_not_called()
     assert isinstance(conn.session.auth, BearerAuth)
+    assert isinstance(conn.session.auth, BearerAuth)
     assert conn.session.auth.token == "at"
 
 
@@ -50,6 +51,7 @@ def test_login_without_tokens_runs_pkce_flow():
         flow.side_effect = _populate
         auth.login(conn)
     flow.assert_called_once_with(conn)
+    assert isinstance(conn.session.auth, BearerAuth)
     assert conn.session.auth.token == "fresh_at"
 
 
@@ -81,6 +83,7 @@ def test_authenticate_calls_token_endpoint_and_rotates():
     assert "client_secret" not in sent_data  # public client
     assert auth.access_token == "new_at"
     assert auth.refresh_token == "new_rt"
+    assert isinstance(conn.session.auth, BearerAuth)
     assert conn.session.auth.token == "new_at"
 
 
@@ -95,6 +98,7 @@ def test_authenticate_passes_client_secret_for_confidential_client():
     with patch("docuware.auth.httpx.post", return_value=_refresh_response()) as post:
         auth.authenticate(_conn())
     sent_data = post.call_args.kwargs.get("data")
+    assert sent_data is not None
     assert sent_data["client_secret"] == "webapp_secret"
 
 
@@ -224,7 +228,7 @@ def test_pkce_flow_end_to_end_with_fake_browser():
 
         def fire():
             time.sleep(0.05)  # let HTTPServer.handle_request() be entered
-            c = http.client.HTTPConnection(cb.hostname, cb.port)
+            c = http.client.HTTPConnection(cb.hostname or "", cb.port)
             c.request("GET", f"{cb.path}?code=AUTHCODE&state={state}")
             c.getresponse().read()
             c.close()
@@ -268,7 +272,7 @@ def test_pkce_flow_state_mismatch_raises():
 
         def fire():
             time.sleep(0.05)
-            c = http.client.HTTPConnection(cb.hostname, cb.port)
+            c = http.client.HTTPConnection(cb.hostname or "", cb.port)
             c.request("GET", f"{cb.path}?code=AUTHCODE&state=WRONG")
             c.getresponse().read()
             c.close()
@@ -297,7 +301,7 @@ def test_pkce_flow_error_callback_raises():
 
         def fire():
             time.sleep(0.05)
-            c = http.client.HTTPConnection(cb.hostname, cb.port)
+            c = http.client.HTTPConnection(cb.hostname or "", cb.port)
             c.request("GET", f"{cb.path}?error=access_denied")
             c.getresponse().read()
             c.close()

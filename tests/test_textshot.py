@@ -90,6 +90,7 @@ class TestTextShotParsing(unittest.TestCase):
     def test_lines_and_words(self):
         ts = TextShot(SAMPLE_TEXTSHOT)
         zone = ts.pages[0].zones[0]
+        assert isinstance(zone, TextZone)
         self.assertEqual(len(zone.lines), 2)
         self.assertIsInstance(zone.lines[0], TextLine)
 
@@ -179,7 +180,7 @@ class TestTableZoneParsing(unittest.TestCase):
     def test_table_zone_cells_parsed(self):
         ts = TextShot(SAMPLE_WITH_TABLE)
         table = ts.pages[0].zones[1]
-        self.assertIsInstance(table, TableZone)
+        assert isinstance(table, TableZone)
         self.assertEqual(len(table.cells), 2)
         self.assertEqual(len(table.cells[0].lines), 2)
 
